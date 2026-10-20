@@ -675,6 +675,7 @@
     _createBar() {
       this.barEl = document.createElement("div");
       this.barEl.className = "waveform-bar";
+      this.barEl.setAttribute("inert", "");
       const theme = this.config.theme || this._detectTheme();
       if (theme === "light") this.barEl.classList.add("wb-light");
       this._resolvedTheme = theme;
@@ -1434,11 +1435,17 @@
     // UI: Bar visibility & Queue panel
     // =====================================================================
     show() {
-      if (this.barEl) this.barEl.classList.add("wb-active");
+      if (this.barEl) {
+        this.barEl.classList.add("wb-active");
+        this.barEl.removeAttribute("inert");
+      }
       return this;
     }
     hide() {
-      if (this.barEl) this.barEl.classList.remove("wb-active");
+      if (this.barEl) {
+        this.barEl.classList.remove("wb-active");
+        this.barEl.setAttribute("inert", "");
+      }
       this.closeQueuePanel();
       this.closeVolumePopup();
       return this;

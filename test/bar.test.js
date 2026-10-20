@@ -940,3 +940,38 @@ describe('shuffle picks upcoming tracks only', () => {
 		expect(bar.getCurrentIndex()).not.toBe(last);
 	});
 });
+
+describe('hidden bar is not focusable (inert in lockstep with visibility)', () => {
+	it('is inert from creation, before any track is shown', () => {
+		const bar = makeBar();
+		expect(bar.barEl.classList.contains('wb-active')).toBe(false);
+		expect(bar.barEl.hasAttribute('inert')).toBe(true);
+	});
+
+	it('drops inert on show() and restores it on hide()', () => {
+		const bar = makeBar();
+		bar.show();
+		expect(bar.barEl.classList.contains('wb-active')).toBe(true);
+		expect(bar.barEl.hasAttribute('inert')).toBe(false);
+		bar.hide();
+		expect(bar.barEl.classList.contains('wb-active')).toBe(false);
+		expect(bar.barEl.hasAttribute('inert')).toBe(true);
+	});
+
+	it('is not inert once a track plays (play() shows the bar)', async () => {
+		const bar = makeBar();
+		await bar.play({ url: 'a.mp3', title: 'A' });
+		expect(bar.barEl.hasAttribute('inert')).toBe(false);
+	});
+
+	it('closes the queue panel along with the bar', () => {
+		// The queue lives outside the bar (a body-level sheet); its closed state is
+		// visibility: hidden (pinned in css.test.js), and hide() closes it.
+		const bar = makeBar({ persist: false, showQueue: true });
+		bar.show();
+		bar.openQueuePanel();
+		bar.hide();
+		expect(bar.queueOpen).toBe(false);
+		expect(bar.queueEl.classList.contains('wb-queue-open')).toBe(false);
+	});
+});

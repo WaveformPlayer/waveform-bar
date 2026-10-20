@@ -67,13 +67,20 @@
     color: var(--wb-text);
     transform: translateY(100%);
     opacity: 0;
+    /* Hidden, not just moved: an off-screen bar's controls must not stay in the
+       tab order or the accessibility tree (core.js also sets `inert`). The
+       visibility transition matches the slide, so it flips to hidden only once
+       the slide-out has finished, and to visible at once on show. */
+    visibility: hidden;
     transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.4s ease;
+    opacity 0.4s ease,
+    visibility 0.5s;
 }
 
 .waveform-bar.wb-active {
     transform: translateY(0);
     opacity: 1;
+    visibility: visible;
 }
 
 .waveform-bar * {

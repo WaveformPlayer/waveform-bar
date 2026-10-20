@@ -55,3 +55,31 @@ describe('queue keyboard affordances', () => {
 		expect(CSS).toMatch(/\.wb-queue-skip:focus-visible/);
 	});
 });
+
+/**
+ * Hidden surfaces must also be unfocusable. Transform + opacity only move or
+ * fade a box — its controls stay in the tab order — so every closed state
+ * carries `visibility: hidden` (which removes it from focus and the a11y tree)
+ * with a visibility transition, so the close animation still plays.
+ */
+describe('hidden surfaces are unfocusable', () => {
+	// Every rule whose selector is exactly `sel`, at the start of a line (so
+	// `.wb-light .wb-queue-panel` or a grouped token block doesn't count).
+	const rules = (sel) => [...CSS.matchAll(
+		new RegExp('\\n' + sel.replace(/\./g, '\\.') + '\\s*\\{([^}]*)\\}', 'g'),
+	)].map((m) => m[1]).join('\n');
+
+	it('hides the idle bar, and transitions visibility with the slide', () => {
+		const idle = rules('.waveform-bar');
+		expect(idle).toMatch(/visibility:\s*hidden/);
+		expect(idle).toMatch(/transition:[^;]*visibility\s+0\.5s/);
+		expect(rules('.waveform-bar.wb-active')).toMatch(/visibility:\s*visible/);
+	});
+
+	it('hides the closed queue panel and volume popup', () => {
+		expect(rules('.wb-queue-panel')).toMatch(/visibility:\s*hidden/);
+		expect(rules('.wb-queue-panel.wb-queue-open')).toMatch(/visibility:\s*visible/);
+		expect(rules('.wb-volume-popup')).toMatch(/visibility:\s*hidden/);
+		expect(rules('.wb-volume-popup.wb-volume-open')).toMatch(/visibility:\s*visible/);
+	});
+});

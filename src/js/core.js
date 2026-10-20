@@ -395,6 +395,10 @@ export class WaveformBar {
     _createBar() {
         this.barEl = document.createElement('div');
         this.barEl.className = 'waveform-bar';
+        // Hidden until show(). The idle bar is only slid off-screen and faded,
+        // so without `inert` its controls stay in the tab order while invisible.
+        // show()/hide() toggle it in lockstep with `.wb-active`.
+        this.barEl.setAttribute('inert', '');
 
         // Theme: explicit or auto-detect
         const theme = this.config.theme || this._detectTheme();
@@ -1377,12 +1381,19 @@ export class WaveformBar {
     // =====================================================================
 
     show() {
-        if (this.barEl) this.barEl.classList.add('wb-active');
+        if (this.barEl) {
+            this.barEl.classList.add('wb-active');
+            this.barEl.removeAttribute('inert');
+        }
         return this;
     }
 
     hide() {
-        if (this.barEl) this.barEl.classList.remove('wb-active');
+        if (this.barEl) {
+            this.barEl.classList.remove('wb-active');
+            // Unfocusable while hidden — see _createBar().
+            this.barEl.setAttribute('inert', '');
+        }
         this.closeQueuePanel();
         this.closeVolumePopup();
         return this;

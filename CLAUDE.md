@@ -39,6 +39,7 @@ it doesn't propagate. Grep `opts\.\w* = this\.config` to see the full current se
   release, bump the wrappers' devDependency so their drift test sees it.
 - Peer dep on `@arraypress/waveform-player@^1.x`; `dist/` is committed.
 - Logging prefix `[WaveformBar]`.
+- **A hidden surface must be unfocusable, not just moved.** The bar toggles `inert` in lockstep with `.wb-active` (`_createBar()` sets it, `show()`/`hide()` flip it) and its idle CSS state is `visibility: hidden` with a matching transition; the queue panel and volume popup rely on `visibility: hidden` when closed. Transform/opacity alone leaves controls in the tab order. `test/css.test.js` pins the CSS half.
 
 ## Cross-repo
 An option change here is usually part of a 15-package family batch —
