@@ -150,7 +150,7 @@ All notable changes to this project will be documented in this file.
   glyph since forever (`.waveform-icon-play svg`); the bar had no equivalent
   rule at all, so the two components looked different side by side. Thanks to
   [@sporteka2](https://github.com/sporteka2) for reporting in
-  [#1](https://github.com/arraypress/waveform-bar/issues/1).
+  [#1](https://github.com/WaveformPlayer/waveform-bar/issues/1).
 - **A corrupted or version-skewed persisted queue no longer breaks restore.**
   `restoreQueueState` accepted anything with a truthy `queue.length` — and
   `'abc'.length` is 3 — so a stored value of the wrong shape passed the guard and
@@ -178,7 +178,7 @@ All notable changes to this project will be documented in this file.
   transparent-background bug.** On any page that doesn't paint `<body>`, the
   computed background is `rgba(0, 0, 0, 0)`; the bar scored that as pure black
   and pinned itself to the dark theme on white pages. Same root cause as
-  [waveform-player#21](https://github.com/arraypress/waveform-player/issues/21).
+  [waveform-player#21](https://github.com/WaveformPlayer/waveform-player/issues/21).
 
 ### Changed
 

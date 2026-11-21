@@ -43,12 +43,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/arraypress/waveform-bar.git"
+    "url": "git+https://github.com/WaveformPlayer/waveform-bar.git"
   },
   "bugs": {
-    "url": "https://github.com/arraypress/waveform-bar/issues"
+    "url": "https://github.com/WaveformPlayer/waveform-bar/issues"
   },
-  "homepage": "https://github.com/arraypress/waveform-bar#readme",
+  "homepage": "https://github.com/WaveformPlayer/waveform-bar#readme",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"

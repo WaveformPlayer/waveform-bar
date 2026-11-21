@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
  * pinned here alongside the geometry that justifies it.
  *
  * @see ../src/css/waveform-bar.css
- * @see https://github.com/arraypress/waveform-bar/issues/1
+ * @see https://github.com/WaveformPlayer/waveform-bar/issues/1
  */
 const CSS = readFileSync(resolve(process.cwd(), 'src/css/waveform-bar.css'), 'utf8');
 const ICONS = readFileSync(resolve(process.cwd(), 'src/js/icons.js'), 'utf8');
