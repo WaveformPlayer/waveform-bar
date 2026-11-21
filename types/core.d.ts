@@ -104,3 +104,4 @@ export declare class WaveformBar {
      */
     setShuffle(on: boolean): this;
 }
+//# sourceMappingURL=core.d.ts.map

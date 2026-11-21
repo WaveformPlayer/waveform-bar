@@ -25,3 +25,4 @@ export declare const ICONS: {
     repeatAll: string;
     repeatOne: string;
 };
+//# sourceMappingURL=icons.d.ts.map

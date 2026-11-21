@@ -14,18 +14,6 @@ export declare function extractTitle(url: string): string;
  */
 export declare function escapeHtml(str: unknown): string;
 /**
- * Whether a URL is safe to navigate to (assign to `location.href`).
- * Allows only `http`/`https` and relative URLs, rejecting `javascript:`,
- * `data:`, `blob:`, `vbscript:` and other script-bearing schemes.
- *
- * TODO(harden): adopt `WaveformPlayer.utils.isSafeHref` once the peer dep
- * is bumped to ^1.8.0 (which ships this helper). Inlined here so the
- * open-redirect / XSS guard is fixed without a peer bump.
- *
- * @param url
- */
-export declare function isSafeHref(url: unknown): boolean;
-/**
  * Format seconds to M:SS.
  *
  * Falsy, non-numeric, non-finite and negative inputs all render as `'0:00'`.
@@ -39,6 +27,16 @@ export declare function isSafeHref(url: unknown): boolean;
  * @param seconds
  */
 export declare function formatTime(seconds: unknown): string;
+/**
+ * A track's `duration` as seconds, or `undefined` when it isn't a usable
+ * length. Accepts a number of seconds (`187`), a numeric string (`'187'`,
+ * `'187.5'`, as `data-duration` gives it) or a clock string (`'3:07'`,
+ * `'1:02:03'`) — 1.x documented `duration` as a display string, so pages
+ * written for it still give the player a real length. Anything else, and
+ * anything not greater than 0, is `undefined`.
+ * @param value
+ */
+export declare function parseDuration(value: unknown): number | undefined;
 /**
  * Coerce a markers value to an array of marker objects with a finite numeric
  * `time`. Anything else — a string, `null` entries, an unparseable time — is
@@ -77,3 +75,4 @@ export declare function mergeTrack(base: WaveformBarTrack, update: Partial<Wavef
  * @param el
  */
 export declare function parseTrackFromElement(el: HTMLElement): WaveformBarTrack | null;
+//# sourceMappingURL=utils.d.ts.map

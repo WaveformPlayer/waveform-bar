@@ -19,3 +19,4 @@ export declare function renderQueue(bodyEl: HTMLElement | null, countEl: HTMLEle
     onSkipTo?: (index: number) => void;
     onRemove?: (index: number) => void;
 }): void;
+//# sourceMappingURL=queue.d.ts.map

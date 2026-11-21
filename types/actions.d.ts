@@ -9,3 +9,4 @@ import type { WaveformBarAction, WaveformBarActionPayload } from './types.js';
  * @param payload - Data to send
  */
 export declare function fireAction(actionConfig: WaveformBarAction | null | undefined, payload: WaveformBarActionPayload): void;
+//# sourceMappingURL=actions.d.ts.map

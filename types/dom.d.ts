@@ -20,3 +20,4 @@ import type { WaveformBarResolvedConfig } from './types.js';
  * @param config
  */
 export declare function buildBarHTML(config: WaveformBarResolvedConfig): string;
+//# sourceMappingURL=dom.d.ts.map

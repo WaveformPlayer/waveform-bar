@@ -1,5 +1,5 @@
 /**
- * WaveformBar v1.0.0
+ * WaveformBar
  * Persistent bottom audio player bar for WaveformPlayer
  *
  * @author ArrayPress
@@ -21,3 +21,4 @@ declare const instance: WaveformBar;
 export default instance;
 export { WaveformBar };
 export type { WaveformBarRepeatMode, WaveformBarTheme, WaveformBarMode, WaveformBarMarker, WaveformBarTrack, WaveformBarActionPayload, WaveformBarAction, WaveformBarActions, WaveformBarConfig, WaveformBarEventMap, } from './types.js';
+//# sourceMappingURL=index.d.ts.map

@@ -52,3 +52,4 @@ export declare function saveFavorites(key: string, favorites: Set<string>): void
  * @param key - Storage key
  */
 export declare function restoreFavorites(key: string): Set<string>;
+//# sourceMappingURL=storage.d.ts.map
