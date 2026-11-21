@@ -4,16 +4,17 @@
  */
 
 import {ICONS} from './icons.js';
+import type {WaveformBarResolvedConfig} from './types.js';
 
 /**
  * Transport cluster: prev / play / next / repeat. Shared by both layouts —
  * the `center` layout simply places this in the middle column instead of
  * the left zone. Class names are identical across layouts so the JS wiring
  * (which selects purely by class) never changes.
- * @param {Object} config
- * @returns {string}
+ * @param config
+ * @returns 
  */
-function buildControls(config) {
+function buildControls(config: WaveformBarResolvedConfig): string {
     let s = '<div class="wb-controls">';
     if (config.showShuffle) {
         s += `<button class="wb-btn wb-btn-sm wb-shuffle" aria-label="Shuffle" title="Shuffle: Off" aria-pressed="false">${ICONS.shuffle}</button>`;
@@ -33,7 +34,7 @@ function buildControls(config) {
 }
 
 /** Now-playing block: artwork + title/artist. */
-function buildTrack() {
+function buildTrack(): string {
     return `<div class="wb-track">
         <div class="wb-artwork">${ICONS.music}</div>
         <div class="wb-track-text">
@@ -44,17 +45,17 @@ function buildTrack() {
 }
 
 /** Meta-tags container (filled by _renderMeta). */
-function buildMeta(config) {
+function buildMeta(config: WaveformBarResolvedConfig): string {
     return config.showMeta ? '<div class="wb-meta"></div>' : '';
 }
 
 /**
  * Secondary controls — actions (fav/cart) + volume + share + queue button.
  * Returned WITHOUT the `.wb-right` wrapper so each layout can place them.
- * @param {Object} config
- * @returns {string}
+ * @param config
+ * @returns 
  */
-function buildRightControls(config) {
+function buildRightControls(config: WaveformBarResolvedConfig): string {
     let s = '';
 
     if (config.actions) {
@@ -95,7 +96,7 @@ function buildRightControls(config) {
  * the collapsed-pill CSS can hide the other zones while keeping this button
  * visible as the "expand" affordance.
  */
-function buildCollapse(config) {
+function buildCollapse(config: WaveformBarResolvedConfig): string {
     return config.collapsible
         ? `<button class="wb-btn wb-btn-sm wb-collapse" aria-label="Collapse" title="Collapse" aria-expanded="true">${ICONS.collapse}</button>`
         : '';
@@ -115,10 +116,10 @@ function buildCollapse(config) {
  * grouping + order differ — so `_createBar`'s class-based ref caching and
  * event binding work identically for either.
  *
- * @param {Object} config
- * @returns {string}
+ * @param config
+ * @returns 
  */
-export function buildBarHTML(config) {
+export function buildBarHTML(config: WaveformBarResolvedConfig): string {
     const controls = buildControls(config);
     const track = buildTrack();
     const meta = buildMeta(config);

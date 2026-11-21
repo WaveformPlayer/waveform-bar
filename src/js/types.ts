@@ -220,3 +220,17 @@ export interface WaveformBarEventMap {
     'waveformbar:share': CustomEvent<{url: string; time: number; track: WaveformBarTrack | null}>;
     'waveformbar:collapse': CustomEvent<{collapsed: boolean}>;
 }
+
+/**
+ * The config once `init()` has merged it over the defaults and derived `mode`,
+ * `layout` and `waveform`. Not re-exported from the entry point.
+ */
+export type WaveformBarResolvedConfig = Required<WaveformBarConfig>;
+
+/** What the bar keeps in sessionStorage. Not re-exported from the entry point. */
+export interface WaveformBarQueueState {
+    queue: WaveformBarTrack[];
+    currentIndex: number;
+    position: number;
+    isPlaying: boolean;
+}

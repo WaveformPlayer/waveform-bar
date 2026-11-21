@@ -5,12 +5,13 @@
 
 import {ICONS} from './icons.js';
 import {escapeHtml} from './utils.js';
+import type {WaveformBarTrack} from './types.js';
 
 /**
  * Create the queue panel DOM element
- * @returns {HTMLElement}
+ * @returns 
  */
-export function createQueuePanel() {
+export function createQueuePanel(): HTMLElement {
     const el = document.createElement('div');
     el.className = 'wb-queue-panel';
     el.innerHTML = `
@@ -33,14 +34,14 @@ export function createQueuePanel() {
  * `<div>`); the remove button stays a sibling rather than nesting interactive
  * content inside it. Text uses block `<span>`s — `<div>` isn't allowed in a
  * button.
- * @param {Object} t - Track
- * @param {number} index - Queue index
- * @param {string} extraClass - Modifier class(es), with leading space
- * @param {string|number} num - Number column content (index or icon markup)
- * @param {boolean} removable - Render a remove button
- * @returns {string}
+ * @param t - Track
+ * @param index - Queue index
+ * @param extraClass - Modifier class(es), with leading space
+ * @param num - Number column content (index or icon markup)
+ * @param removable - Render a remove button
+ * @returns 
  */
-function queueItem(t, index, extraClass, num, removable) {
+function queueItem(t: WaveformBarTrack, index: number, extraClass: string, num: string | number, removable: boolean): string {
     const current = extraClass.includes('wb-queue-current') ? ' aria-current="true"' : '';
     return `<div class="wb-queue-item${extraClass}" data-qi="${index}"${current}>
             <button type="button" class="wb-queue-skip">
@@ -56,17 +57,23 @@ function queueItem(t, index, extraClass, num, removable) {
 
 /**
  * Render queue panel contents
- * @param {HTMLElement} bodyEl - Queue body element
- * @param {HTMLElement} countEl - Queue count badge element
- * @param {Array} queue - Queue array
- * @param {number} currentIndex - Current playing index
- * @param {Object} callbacks - { onSkipTo, onRemove }
+ * @param bodyEl - Queue body element
+ * @param countEl - Queue count badge element
+ * @param queue - Queue array
+ * @param currentIndex - Current playing index
+ * @param callbacks - { onSkipTo, onRemove }
  */
-export function renderQueue(bodyEl, countEl, queue, currentIndex, callbacks) {
+export function renderQueue(
+    bodyEl: HTMLElement | null,
+    countEl: HTMLElement | null,
+    queue: WaveformBarTrack[],
+    currentIndex: number,
+    callbacks: {onSkipTo?: (index: number) => void; onRemove?: (index: number) => void}
+): void {
     if (!bodyEl) return;
 
     const upcoming = Math.max(0, queue.length - 1 - currentIndex);
-    if (countEl) countEl.textContent = upcoming;
+    if (countEl) countEl.textContent = upcoming as unknown as string;
 
     if (queue.length === 0) {
         bodyEl.innerHTML = `<div class="wb-queue-empty">${ICONS.queue}<p>Queue is empty</p></div>`;
@@ -76,7 +83,7 @@ export function renderQueue(bodyEl, countEl, queue, currentIndex, callbacks) {
     // Re-rendering replaces the rows, which would drop keyboard focus to
     // <body> right after a keyboard skip/remove. Remember the focused row.
     const active = document.activeElement;
-    const focusedQi = active && bodyEl.contains(active) ? active.closest('[data-qi]')?.dataset.qi : null;
+    const focusedQi = active && bodyEl.contains(active) ? active.closest<HTMLElement>('[data-qi]')?.dataset.qi : null;
 
     let html = '';
 
@@ -107,23 +114,23 @@ export function renderQueue(bodyEl, countEl, queue, currentIndex, callbacks) {
     bodyEl.innerHTML = html;
 
     // Bind click events
-    bodyEl.querySelectorAll('.wb-queue-item[data-qi]').forEach(el => {
+    bodyEl.querySelectorAll<HTMLElement>('.wb-queue-item[data-qi]').forEach(el => {
         el.addEventListener('click', (e) => {
-            if (e.target.closest('.wb-queue-remove')) return;
-            if (callbacks.onSkipTo) callbacks.onSkipTo(parseInt(el.dataset.qi));
+            if ((e.target as Element).closest('.wb-queue-remove')) return;
+            if (callbacks.onSkipTo) callbacks.onSkipTo(parseInt(el.dataset.qi!));
         });
     });
 
-    bodyEl.querySelectorAll('.wb-queue-remove').forEach(btn => {
+    bodyEl.querySelectorAll<HTMLElement>('.wb-queue-remove').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (callbacks.onRemove) callbacks.onRemove(parseInt(btn.dataset.qi));
+            if (callbacks.onRemove) callbacks.onRemove(parseInt(btn.dataset.qi!));
         });
     });
 
     if (focusedQi != null) {
-        const target = bodyEl.querySelector(`.wb-queue-item[data-qi="${focusedQi}"] .wb-queue-skip`)
-            || bodyEl.querySelector('.wb-queue-skip');
+        const target = bodyEl.querySelector<HTMLElement>(`.wb-queue-item[data-qi="${focusedQi}"] .wb-queue-skip`)
+            || bodyEl.querySelector<HTMLElement>('.wb-queue-skip');
         if (target) target.focus();
     }
 }

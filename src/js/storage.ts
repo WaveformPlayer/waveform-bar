@@ -4,13 +4,14 @@
  */
 
 import {normalizeTrack} from './utils.js';
+import type {WaveformBarQueueState} from './types.js';
 
 /**
  * Save queue state to sessionStorage
- * @param {string} key - Storage key
- * @param {Object} state - State to save
+ * @param key - Storage key
+ * @param state - State to save
  */
-export function saveQueueState(key, state) {
+export function saveQueueState(key: string, state: WaveformBarQueueState): void {
     try {
         sessionStorage.setItem(key, JSON.stringify(state));
     } catch (e) {}
@@ -27,10 +28,10 @@ export function saveQueueState(key, state) {
  * included) before it's handed back. A restored state that isn't usable is
  * discarded rather than half-applied.
  *
- * @param {string} key - Storage key
- * @returns {Object|null}
+ * @param key - Storage key
+ * @returns 
  */
-export function restoreQueueState(key) {
+export function restoreQueueState(key: string): WaveformBarQueueState | null {
     try {
         const raw = sessionStorage.getItem(key);
         if (!raw) return null;
@@ -41,7 +42,7 @@ export function restoreQueueState(key) {
         // track's fields — a corrupt `markers` ('x', [null]) would otherwise
         // throw in init() on every page load for the rest of the tab session.
         const queue = Array.isArray(d.queue)
-            ? d.queue.map(t => normalizeTrack(t)).filter(Boolean)
+            ? d.queue.map((t: unknown) => normalizeTrack(t)).filter(Boolean)
             : [];
         if (!queue.length) return null;
 
@@ -66,12 +67,12 @@ export function restoreQueueState(key) {
 
 /**
  * Save volume to localStorage (persists across sessions)
- * @param {string} key - Storage key
- * @param {number} volume
- * @param {boolean} muted
- * @param {number} volumeBeforeMute
+ * @param key - Storage key
+ * @param volume
+ * @param muted
+ * @param volumeBeforeMute
  */
-export function saveVolume(key, volume, muted, volumeBeforeMute) {
+export function saveVolume(key: string, volume: number, muted: boolean, volumeBeforeMute: number): void {
     try {
         localStorage.setItem(key + '-vol', JSON.stringify({
             v: volume, m: muted, b: volumeBeforeMute
@@ -81,12 +82,12 @@ export function saveVolume(key, volume, muted, volumeBeforeMute) {
 
 /**
  * Restore volume from localStorage
- * @param {string} key - Storage key
- * @returns {Object|null} { volume, muted, volumeBeforeMute }
+ * @param key - Storage key
+ * @returns { volume, muted, volumeBeforeMute }
  */
-export function restoreVolume(key) {
+export function restoreVolume(key: string): {volume: number; muted: boolean; volumeBeforeMute: number} | null {
     try {
-        const d = JSON.parse(localStorage.getItem(key + '-vol'));
+        const d = JSON.parse(localStorage.getItem(key + '-vol') as string);
         if (!d) return null;
         return {
             volume: d.v != null ? d.v : 1,
@@ -100,10 +101,10 @@ export function restoreVolume(key) {
 
 /**
  * Save favorites to localStorage
- * @param {string} key - Storage key
- * @param {Set} favorites
+ * @param key - Storage key
+ * @param favorites
  */
-export function saveFavorites(key, favorites) {
+export function saveFavorites(key: string, favorites: Set<string>): void {
     try {
         localStorage.setItem(key + '-favs', JSON.stringify([...favorites]));
     } catch (e) {}
@@ -111,12 +112,12 @@ export function saveFavorites(key, favorites) {
 
 /**
  * Restore favorites from localStorage
- * @param {string} key - Storage key
- * @returns {Set}
+ * @param key - Storage key
+ * @returns 
  */
-export function restoreFavorites(key) {
+export function restoreFavorites(key: string): Set<string> {
     try {
-        const d = JSON.parse(localStorage.getItem(key + '-favs'));
+        const d = JSON.parse(localStorage.getItem(key + '-favs') as string);
         return Array.isArray(d) ? new Set(d) : new Set();
     } catch (e) {
         return new Set();
