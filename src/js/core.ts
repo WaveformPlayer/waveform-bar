@@ -273,7 +273,7 @@ export class WaveformBar {
      * Initialize WaveformBar
      * @param config
      */
-    init(config: WaveformBarConfig = {}): WaveformBar {
+    init(config: WaveformBarConfig = {}): this {
         if (this.isInitialized) this.destroy();
 
         // `mode` and `layout` are derived just below.
@@ -361,7 +361,7 @@ export class WaveformBar {
     /**
      * Destroy everything
      */
-    destroy(): WaveformBar {
+    destroy(): this {
         // Flip every inline external player to paused before the map is
         // dropped below. The embedded player's teardown doesn't route back
         // through onPause, so without this they'd stay "playing" (and keep
@@ -1128,7 +1128,7 @@ export class WaveformBar {
      * Play a track immediately
      * @param trackOrUrl
      */
-    play(trackOrUrl: WaveformBarTrack | string): WaveformBar {
+    play(trackOrUrl: WaveformBarTrack | string): this {
         const track = toTrack(trackOrUrl);
         if (!track) return this;
 
@@ -1159,7 +1159,7 @@ export class WaveformBar {
      * Add to end of queue
      * @param trackOrUrl
      */
-    addToQueue(trackOrUrl: WaveformBarTrack | string): WaveformBar {
+    addToQueue(trackOrUrl: WaveformBarTrack | string): this {
         const track = toTrack(trackOrUrl);
         if (!track) return this;
         if (this.queue.find(t => t.url === track.url)) return this;
@@ -1246,7 +1246,7 @@ export class WaveformBar {
         return this;
     }
 
-    skipTo(index: number): WaveformBar {
+    skipTo(index: number): this {
         if (index < 0 || index >= this.queue.length) return this;
         if (index === this.currentIndex) {
             this.togglePlay();
@@ -1261,7 +1261,7 @@ export class WaveformBar {
      * Seek to a specific marker by index on the current track
      * @param markerIndex
      */
-    seekToMarker(markerIndex: number): WaveformBar {
+    seekToMarker(markerIndex: number): this {
         if (!this._activeMarkers || markerIndex < 0 || markerIndex >= this._activeMarkers.length) return this;
         const marker = this._activeMarkers[markerIndex];
         if (this.player) {
@@ -1275,7 +1275,7 @@ export class WaveformBar {
      * Seek to a marker by label on the current track
      * @param label
      */
-    seekToMarkerByLabel(label: string): WaveformBar {
+    seekToMarkerByLabel(label: string): this {
         if (!this._activeMarkers) return this;
         const index = this._activeMarkers.findIndex(m =>
             (m.label || m.title || '').toLowerCase() === label.toLowerCase()
@@ -1288,7 +1288,7 @@ export class WaveformBar {
     // Volume (public)
     // =====================================================================
 
-    setVolume(level: number): WaveformBar {
+    setVolume(level: number): this {
         this.volume = Math.max(0, Math.min(1, level));
         this.isMuted = this.volume === 0;
         if (this.player) this.player.setVolume(this.volume);
@@ -1401,7 +1401,7 @@ export class WaveformBar {
     // Queue (public)
     // =====================================================================
 
-    removeFromQueue(index: number): WaveformBar {
+    removeFromQueue(index: number): this {
         if (index < 0 || index >= this.queue.length || index === this.currentIndex) return this;
         this.queue.splice(index, 1);
         if (index < this.currentIndex) this.currentIndex--;
@@ -1774,7 +1774,7 @@ export class WaveformBar {
     /**
      * Collapse the bar to a small floating pill (artwork + play + expand).
      */
-    collapse(): WaveformBar {
+    collapse(): this {
         this.isCollapsed = true;
         if (this.barEl) this.barEl.classList.add('wb-collapsed');
         this._updateCollapseButton();
@@ -1786,7 +1786,7 @@ export class WaveformBar {
     /**
      * Restore the bar from its collapsed pill back to the full bar.
      */
-    expand(): WaveformBar {
+    expand(): this {
         this.isCollapsed = false;
         if (this.barEl) this.barEl.classList.remove('wb-collapsed');
         this._updateCollapseButton();
@@ -1798,7 +1798,7 @@ export class WaveformBar {
     /**
      * Toggle the collapsed pill state.
      */
-    toggleCollapse(): WaveformBar {
+    toggleCollapse(): this {
         return this.isCollapsed ? this.expand() : this.collapse();
     }
 
@@ -2000,7 +2000,7 @@ export class WaveformBar {
     /**
      * Cycle through repeat modes: off → all → one → off
      */
-    cycleRepeat(): WaveformBar {
+    cycleRepeat(): this {
         const modes: WaveformBarRepeatMode[] = ['off', 'all', 'one'];
         const current = modes.indexOf(this.repeat);
         this.repeat = modes[(current + 1) % modes.length];
@@ -2014,7 +2014,7 @@ export class WaveformBar {
      * Set repeat mode directly
      * @param mode
      */
-    setRepeat(mode: WaveformBarRepeatMode): WaveformBar {
+    setRepeat(mode: WaveformBarRepeatMode): this {
         if (['off', 'all', 'one'].includes(mode)) {
             this.repeat = mode;
             this._updateRepeatButton();
@@ -2041,7 +2041,7 @@ export class WaveformBar {
     /**
      * Toggle shuffle (random queue advance) on / off.
      */
-    toggleShuffle(): WaveformBar {
+    toggleShuffle(): this {
         return this.setShuffle(!this.shuffle);
     }
 
@@ -2049,7 +2049,7 @@ export class WaveformBar {
      * Set shuffle on / off directly.
      * @param on
      */
-    setShuffle(on: boolean): WaveformBar {
+    setShuffle(on: boolean): this {
         const wasOn = this.shuffle;
         this.shuffle = !!on;
         // Switching shuffle on starts a fresh pass from the current track.

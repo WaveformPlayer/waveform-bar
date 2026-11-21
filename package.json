@@ -5,15 +5,18 @@
   "main": "dist/waveform-bar.js",
   "module": "dist/waveform-bar.esm.js",
   "unpkg": "dist/waveform-bar.min.js",
+  "types": "types/index.d.ts",
   "files": [
     "dist/",
     "src/",
+    "types/",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "npm run build:js && npm run build:css",
+    "build": "npm run build:js && npm run build:css && npm run build:types",
     "build:js": "npm run build:iife && npm run build:esm && npm run build:min",
+    "build:types": "rm -rf types && tsc -p tsconfig.build.json",
     "build:css": "cp src/css/waveform-bar.css dist/ && esbuild src/css/waveform-bar.css --minify --outfile=dist/waveform-bar.min.css && cp src/css/waveform-bar-icons.css dist/ && rm -rf dist/icons && cp -r src/icons dist/icons",
     "build:iife": "esbuild src/js/index.ts --tsconfig=tsconfig.esbuild.json --bundle --format=iife --outfile=dist/waveform-bar.js",
     "build:esm": "esbuild src/js/index.ts --tsconfig=tsconfig.esbuild.json --bundle --format=esm --outfile=dist/waveform-bar.esm.js",
