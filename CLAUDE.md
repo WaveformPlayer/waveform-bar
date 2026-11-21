@@ -69,8 +69,9 @@ the previous track's). There are three load paths — `_loadCurrentTrack()`,
   field); `main` and `exports["."]` are `dist/waveform-bar.esm.js`; `unpkg` /
   `jsdelivr` are the minified IIFE. `exports` also has `./styles.css`,
   `./dist/*` (every documented CDN/import path is under `dist/`) and
-  `./package.json`. `engines.node >=22.12`. `src/` ships only because of the
-  declaration maps.
+  `./package.json`. `engines.node >=22.12`. `src/js/` ships only because of the
+  declaration maps (`files` lists `src/js/`, not `src/`: the CSS and icons are
+  already in `dist/`).
 - Peer dep on `@arraypress/waveform-player@^2.0.0`; the devDependency is
   `file:../waveform-player` while 2.0 is unpublished. `dist/` and `types/` are
   committed.
