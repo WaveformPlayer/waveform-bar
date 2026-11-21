@@ -3,12 +3,14 @@
  * @description Action button handlers (favorite, cart) for WaveformBar
  */
 
+import type {WaveformBarAction, WaveformBarActionPayload} from './types.js';
+
 /**
  * Fire an action to an endpoint or callback
- * @param {Object} actionConfig - { endpoint, method, headers }
- * @param {Object} payload - Data to send
+ * @param actionConfig - { endpoint, method, headers }
+ * @param payload - Data to send
  */
-export function fireAction(actionConfig, payload) {
+export function fireAction(actionConfig: WaveformBarAction | null | undefined, payload: WaveformBarActionPayload): void {
     if (!actionConfig || !actionConfig.endpoint) return;
 
     // Callback function

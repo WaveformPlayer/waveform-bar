@@ -12,7 +12,7 @@ import { resolve } from 'node:path';
  * @see https://github.com/WaveformPlayer/waveform-bar/issues/1
  */
 const CSS = readFileSync(resolve(process.cwd(), 'src/css/waveform-bar.css'), 'utf8');
-const ICONS = readFileSync(resolve(process.cwd(), 'src/js/icons.js'), 'utf8');
+const ICONS = readFileSync(resolve(process.cwd(), 'src/js/icons.ts'), 'utf8');
 
 describe('play button optical centring', () => {
 	it('renders the icon svgs as blocks, so no baseline gap lifts them', () => {
