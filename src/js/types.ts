@@ -50,10 +50,18 @@ export interface WaveformBarTrack {
     album?: string;
     /** Page the bar's track info links to. Only http(s) and relative URLs are followed. */
     link?: string;
+    /**
+     * The track's length: seconds (`187`) or a clock string (`'3:07'`,
+     * `'1:02:03'`). Shown as a meta tag (seconds are shown as `3:07`) and as
+     * the bar's total time, and passed to the player as its `duration`, a
+     * known length used until the audio's own metadata arrives — so nothing
+     * has to load for the length to show. Anything unparseable is only shown
+     * as a tag.
+     */
     duration?: string | number;
     bpm?: string | number;
     key?: string;
-    /** Pre-computed peaks, or a URL / JSON string of them. */
+    /** Pre-computed peaks: an array, a compact `wp1:` string, or a URL / JSON string of them. */
     waveform?: number[] | string | null;
     markers?: WaveformBarMarker[];
     favorited?: boolean;

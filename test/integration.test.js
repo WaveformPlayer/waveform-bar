@@ -209,3 +209,38 @@ describe('real player: destroy()', () => {
 		expect(inline.isPlaying).toBe(false);
 	});
 });
+
+describe('real player: 2.0 duration and compact peaks', () => {
+	// The documented markup with the 2.0 additions: one element is the inline
+	// player and the trigger, so the core reads data-duration / data-waveform
+	// for the inline surface and the bar reads the same attributes for its own.
+	const peaks = WaveformPlayer.utils.encodeCompactPeaks([0, 0.2, 0.6, 1]);
+	const MARKUP = `<div data-waveform-player
+		data-audio-mode="external"
+		data-url="song.mp3"
+		data-duration="187"
+		data-waveform="${peaks}"
+		data-wb-play
+		data-wb-url="song.mp3"></div>`;
+
+	it('the bar\'s player gets the known duration and decodes the wp1: peaks', async () => {
+		const inline = mountInline(MARKUP);
+		const bar = makeBar();
+		inline.playBtn.click();
+		expect(bar.getCurrentTrack()?.url).toBe('song.mp3');
+
+		await vi.waitFor(() => expect(bar.player.waveformData.length).toBe(4));
+		expect(bar.player.options.duration).toBe(187);
+		expect(bar.player.waveformData[3]).toBe(1);
+		expect(bar.player.waveformData[2]).toBeCloseTo(0.6, 2);
+	});
+
+	it('a track without one leaves the player with no duration', async () => {
+		const bar = makeBar();
+		bar.play({ url: 'a.mp3', duration: 50 });
+		await vi.waitFor(() => expect(bar.player.options.duration).toBe(50));
+		bar.play({ url: 'b.mp3' });
+		await vi.waitFor(() => expect(bar.player.options.url).toBe('b.mp3'));
+		expect(bar.player.options.duration ?? null).toBe(null);
+	});
+});

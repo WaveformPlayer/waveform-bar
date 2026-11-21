@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import WaveformPlayer from '@arraypress/waveform-player/no-autoinit';
-import { parseTrackFromElement, formatTime, normalizeTrack, mergeTrack } from '../src/js/utils.js';
+import { parseTrackFromElement, parseDuration, formatTime, normalizeTrack, mergeTrack } from '../src/js/utils.js';
 
 // 2.0: the bar's own isSafeHref copy is gone; the track-link and share-link
 // guards call the core's `WaveformPlayer.utils.isSafeHref`, which every 2.0
@@ -107,9 +107,48 @@ describe('parseTrackFromElement shape coercion', () => {
 	it('returns null when there is no url', () => {
 		expect(parseTrackFromElement(mk({ wbTitle: 'No URL' }))).toBe(null);
 	});
+
+	// 2.0 cores decode compact peaks; JSON.parse rejected them, so a trigger's
+	// wp1: peaks were silently dropped and the player decoded the audio.
+	it('passes compact wp1: peaks through as the string, for the player to decode', () => {
+		const peaks = WaveformPlayer.utils.encodeCompactPeaks([0, 0.5, 1]);
+		expect(peaks.startsWith('wp1:')).toBe(true);
+		expect(parseTrackFromElement(mk({ wbUrl: 'a.mp3', wbWaveform: peaks })).waveform).toBe(peaks);
+		expect(parseTrackFromElement(mk({ url: 'a.mp3', waveform: peaks })).waveform).toBe(peaks);
+		// Anything else that isn't JSON is still dropped.
+		expect(parseTrackFromElement(mk({ wbUrl: 'a.mp3', wbWaveform: 'wp2:abc' })).waveform).toBe(null);
+	});
+
+	it('reads data-wb-duration / data-duration as given', () => {
+		expect(parseTrackFromElement(mk({ wbUrl: 'a.mp3', wbDuration: '187' })).duration).toBe('187');
+		expect(parseTrackFromElement(mk({ url: 'a.mp3', duration: '3:07' })).duration).toBe('3:07');
+		expect(parseTrackFromElement(mk({ url: 'a.mp3' })).duration).toBe('');
+	});
+});
+
+describe('parseDuration', () => {
+	it('reads seconds, numeric strings and clock strings', () => {
+		expect(parseDuration(187)).toBe(187);
+		expect(parseDuration(187.5)).toBe(187.5);
+		expect(parseDuration('187')).toBe(187);
+		expect(parseDuration(' 187.5 ')).toBe(187.5);
+		expect(parseDuration('3:07')).toBe(187);
+		expect(parseDuration('0:45')).toBe(45);
+		expect(parseDuration('1:02:03')).toBe(3723);
+	});
+
+	it('is undefined for anything that is not a length greater than 0', () => {
+		for (const v of [undefined, null, '', 0, '0', '0:00', -5, '-5', NaN, Infinity, '3:7', '3:75', 'abc', '1e3', '3:07 min', [187], {}]) {
+			expect(parseDuration(v), JSON.stringify(v)).toBe(undefined);
+		}
+	});
 });
 
 describe('normalizeTrack / mergeTrack', () => {
+	it('keeps compact wp1: peaks (it validates nothing about a peaks string)', () => {
+		expect(normalizeTrack({ url: 'a.mp3', waveform: 'wp1:AIA_' }).waveform).toBe('wp1:AIA_');
+	});
+
 	it('strips the player instance and null fields, keeps caller fields', () => {
 		const t = normalizeTrack({ url: 'a.mp3', title: null, player: {}, price: 5, markers: 'x', waveform: null });
 		expect(t).toEqual({ url: 'a.mp3', price: 5, markers: [] });

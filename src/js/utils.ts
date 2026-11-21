@@ -49,6 +49,30 @@ export function formatTime(seconds: unknown): string {
 }
 
 /**
+ * A track's `duration` as seconds, or `undefined` when it isn't a usable
+ * length. Accepts a number of seconds (`187`), a numeric string (`'187'`,
+ * `'187.5'`, as `data-duration` gives it) or a clock string (`'3:07'`,
+ * `'1:02:03'`) — 1.x documented `duration` as a display string, so pages
+ * written for it still give the player a real length. Anything else, and
+ * anything not greater than 0, is `undefined`.
+ * @param value
+ */
+export function parseDuration(value: unknown): number | undefined {
+    let seconds = NaN;
+    if (typeof value === 'number') {
+        seconds = value;
+    } else if (typeof value === 'string') {
+        const s = value.trim();
+        if (/^\d+(\.\d+)?$/.test(s)) {
+            seconds = Number(s);
+        } else if (/^\d+(:[0-5]\d){1,2}$/.test(s)) {
+            seconds = s.split(':').reduce((total, part) => total * 60 + Number(part), 0);
+        }
+    }
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
+}
+
+/**
  * Coerce a markers value to an array of marker objects with a finite numeric
  * `time`. Anything else — a string, `null` entries, an unparseable time — is
  * dropped, because downstream code `.map()`s the array and reads `m.color` /
@@ -141,11 +165,18 @@ export function parseTrackFromElement(el: HTMLElement): WaveformBarTrack | null 
         markers = sanitizeMarkers(JSON.parse(el.dataset.wbMarkers || el.dataset.markers || 'null'));
     } catch (e) {}
 
-    let waveform: number[] | null = null;
-    try {
-        const parsed = JSON.parse(el.dataset.wbWaveform || el.dataset.waveform || 'null');
-        waveform = Array.isArray(parsed) ? parsed : null;
-    } catch (e) {}
+    // Peaks: a JSON array, or a compact `wp1:` string, which is passed through
+    // as-is for the player to decode (JSON.parse would reject it).
+    const rawWaveform = el.dataset.wbWaveform || el.dataset.waveform || '';
+    let waveform: number[] | string | null = null;
+    if (rawWaveform.startsWith('wp1:')) {
+        waveform = rawWaveform;
+    } else {
+        try {
+            const parsed = JSON.parse(rawWaveform || 'null');
+            waveform = Array.isArray(parsed) ? parsed : null;
+        } catch (e) {}
+    }
 
     return {
         url,

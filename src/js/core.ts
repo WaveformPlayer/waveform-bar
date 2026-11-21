@@ -8,6 +8,7 @@ import {
     extractTitle,
     escapeHtml,
     formatTime,
+    parseDuration,
     parseTrackFromElement,
     normalizeTrack,
     mergeTrack
@@ -1662,6 +1663,8 @@ export class WaveformBar {
 
         const loadOpts: Record<string, any> = {autoplay: false};
         if (track.waveform) loadOpts.waveform = track.waveform;
+        const duration = parseDuration(track.duration);
+        if (duration) loadOpts.duration = duration;
         if (track.markers && track.markers.length) {
             const defaultColor = this.config.markerColor;
             loadOpts.markers = track.markers.map(m => ({...m, color: m.color || defaultColor}));
@@ -1864,6 +1867,11 @@ export class WaveformBar {
             loadOpts.waveform = track.waveform;
         }
 
+        // A known length, used until the audio's metadata arrives. Left out
+        // otherwise: loadTrack() then resets the previous track's.
+        const duration = parseDuration(track.duration);
+        if (duration) loadOpts.duration = duration;
+
         // Always pass markers — empty array clears previous track's markers
         if (track.markers && track.markers.length) {
             const defaultColor = this.config.markerColor;
@@ -1911,9 +1919,9 @@ export class WaveformBar {
         const trackEl = this.barEl!.querySelector<HTMLElement>('.wb-track');
         if (trackEl) trackEl.style.cursor = track.link ? 'pointer' : 'default';
 
-        // Reset time
+        // Reset time; a known duration shows before the audio has loaded.
         if (this.timeCurrentEl) this.timeCurrentEl.textContent = '0:00';
-        if (this.timeTotalEl) this.timeTotalEl.textContent = '0:00';
+        if (this.timeTotalEl) this.timeTotalEl.textContent = formatTime(parseDuration(track.duration));
     }
 
     /**
@@ -1943,7 +1951,11 @@ export class WaveformBar {
         const tags: {label: string | number; type: string}[] = [];
         if (track.bpm) tags.push({label: track.bpm + ' BPM', type: 'bpm'});
         if (track.key) tags.push({label: track.key, type: 'key'});
-        if (track.duration) tags.push({label: track.duration, type: 'duration'});
+        if (track.duration) {
+            // Seconds read as a clock; a string like '3:07' is shown as given.
+            const isSeconds = typeof track.duration === 'number' || /^\s*\d+(\.\d+)?\s*$/.test(track.duration);
+            tags.push({label: isSeconds ? formatTime(track.duration) : track.duration, type: 'duration'});
+        }
         if (track.meta) {
             for (const [k, v] of Object.entries(track.meta)) {
                 if (v && tags.length < this.config.maxMeta) tags.push({label: String(v), type: k});
@@ -2382,6 +2394,8 @@ export class WaveformBar {
         // supported API — we handle seek and resume manually below.
         const loadOpts: Record<string, any> = {autoplay: false};
         if (track.waveform) loadOpts.waveform = track.waveform;
+        const duration = parseDuration(track.duration);
+        if (duration) loadOpts.duration = duration;
 
         // Pass markers to the player and set up DJ mode
         if (track.markers && track.markers.length) {

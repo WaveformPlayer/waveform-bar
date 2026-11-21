@@ -983,3 +983,72 @@ describe('hidden bar is not focusable (inert in lockstep with visibility)', () =
 		expect(bar.queueEl.classList.contains('wb-queue-open')).toBe(false);
 	});
 });
+
+/**
+ * 2.0 cores take a per-track `duration` (a known length used before the
+ * audio's metadata) and compact `wp1:` peaks. The bar reads both from triggers
+ * and hands them to the embedded player's loadTrack().
+ */
+describe('track duration and compact peaks reach the player', () => {
+	const lastLoad = (bar) => bar.player.loadCalls.at(-1);
+
+	it('passes a trigger\'s data-duration to loadTrack() as seconds', () => {
+		document.body.innerHTML = '<button data-wb-play data-wb-url="a.mp3" data-duration="187">Play</button>';
+		const bar = makeBar();
+		document.querySelector('[data-wb-play]').click();
+		expect(lastLoad(bar).url).toBe('a.mp3');
+		expect(lastLoad(bar).opts.duration).toBe(187);
+	});
+
+	it('reads a 1.x-style clock string from data-wb-duration as seconds too', () => {
+		document.body.innerHTML = '<button data-wb-play data-wb-url="a.mp3" data-wb-duration="3:07">Play</button>';
+		const bar = makeBar();
+		document.querySelector('[data-wb-play]').click();
+		expect(lastLoad(bar).opts.duration).toBe(187);
+	});
+
+	it('does not pass duration when the track has none (or an unusable one)', () => {
+		document.body.innerHTML =
+			'<button id="none" data-wb-play data-wb-url="a.mp3">A</button>' +
+			'<button id="bad" data-wb-play data-wb-url="b.mp3" data-duration="soon">B</button>';
+		const bar = makeBar();
+		document.getElementById('none').click();
+		expect('duration' in lastLoad(bar).opts).toBe(false);
+		document.getElementById('bad').click();
+		expect(lastLoad(bar).url).toBe('b.mp3');
+		expect('duration' in lastLoad(bar).opts).toBe(false);
+	});
+
+	it('passes duration from play({...}) and on a restored queue', () => {
+		const bar = makeBar({ persist: true });
+		bar.play({ url: 'a.mp3', duration: 95 });
+		expect(lastLoad(bar).opts.duration).toBe(95);
+		bar.destroy();
+
+		const restored = makeBar({ persist: true });
+		expect(lastLoad(restored).url).toBe('a.mp3');
+		expect(lastLoad(restored).opts.autoplay).toBe(false);
+		expect(lastLoad(restored).opts.duration).toBe(95);
+	});
+
+	it('shows a known duration as the total time and as a clock in the meta tag', () => {
+		const bar = makeBar();
+		bar.play({ url: 'a.mp3', duration: '187' });
+		expect(bar.timeTotalEl.textContent).toBe('3:07');
+		expect(bar.metaEl.textContent).toContain('3:07');
+		expect(bar.metaEl.textContent).not.toContain('187');
+
+		// A display string that isn't a length is still shown as given.
+		bar.play({ url: 'b.mp3', duration: 'live' });
+		expect(bar.timeTotalEl.textContent).toBe('0:00');
+		expect(bar.metaEl.textContent).toContain('live');
+	});
+
+	it('passes a trigger\'s compact wp1: peaks to loadTrack() unparsed', () => {
+		const peaks = RealPlayer.utils.encodeCompactPeaks([0.1, 0.5, 1]);
+		document.body.innerHTML = `<button data-wb-play data-wb-url="a.mp3" data-wb-waveform="${peaks}">Play</button>`;
+		const bar = makeBar();
+		document.querySelector('[data-wb-play]').click();
+		expect(lastLoad(bar).opts.waveform).toBe(peaks);
+	});
+});
