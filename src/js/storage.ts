@@ -29,7 +29,6 @@ export function saveQueueState(key: string, state: WaveformBarQueueState): void 
  * discarded rather than half-applied.
  *
  * @param key - Storage key
- * @returns 
  */
 export function restoreQueueState(key: string): WaveformBarQueueState | null {
     try {
@@ -113,7 +112,6 @@ export function saveFavorites(key: string, favorites: Set<string>): void {
 /**
  * Restore favorites from localStorage
  * @param key - Storage key
- * @returns 
  */
 export function restoreFavorites(key: string): Set<string> {
     try {

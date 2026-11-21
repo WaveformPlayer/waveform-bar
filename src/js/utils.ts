@@ -8,7 +8,6 @@ import type {WaveformBarMarker, WaveformBarTrack} from './types.js';
 /**
  * Extract a display title from a URL
  * @param url
- * @returns 
  */
 export function extractTitle(url: string): string {
     if (!url) return 'Untitled';
@@ -20,7 +19,6 @@ export function extractTitle(url: string): string {
 /**
  * Escape HTML to prevent XSS
  * @param str
- * @returns 
  */
 export function escapeHtml(str: unknown): string {
     if (!str) return '';
@@ -39,7 +37,6 @@ export function escapeHtml(str: unknown): string {
  * open-redirect / XSS guard is fixed without a peer bump.
  *
  * @param url
- * @returns 
  */
 export function isSafeHref(url: unknown): boolean {
     if (typeof url !== 'string' || url === '') return false;
@@ -65,7 +62,6 @@ export function isSafeHref(url: unknown): boolean {
  * Note this stays M:SS past an hour (a 65-minute track reads `65:00`), unlike
  * the core player's `formatTime`, which rolls over to H:MM:SS.
  * @param seconds
- * @returns 
  */
 export function formatTime(seconds: unknown): string {
     const total = Number(seconds);
@@ -81,7 +77,6 @@ export function formatTime(seconds: unknown): string {
  * dropped, because downstream code `.map()`s the array and reads `m.color` /
  * `m.time` off every entry without further checks.
  * @param value
- * @returns 
  */
 export function sanitizeMarkers(value: unknown): WaveformBarMarker[] {
     if (!Array.isArray(value)) return [];
@@ -136,7 +131,6 @@ export function normalizeTrack(input: any, {fromPlayer = false}: {fromPlayer?: b
  * no title, a trigger with no artwork — must not wipe what's already queued.
  * @param base
  * @param update
- * @returns 
  */
 export function mergeTrack(base: WaveformBarTrack, update: Partial<WaveformBarTrack> | null | undefined): WaveformBarTrack {
     const merged = {...base};
@@ -150,7 +144,6 @@ export function mergeTrack(base: WaveformBarTrack, update: Partial<WaveformBarTr
 /**
  * Parse track metadata from a trigger element
  * @param el
- * @returns 
  */
 export function parseTrackFromElement(el: HTMLElement): WaveformBarTrack | null {
     const url = el.dataset.wbUrl || el.dataset.url;

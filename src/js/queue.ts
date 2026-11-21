@@ -9,7 +9,6 @@ import type {WaveformBarTrack} from './types.js';
 
 /**
  * Create the queue panel DOM element
- * @returns 
  */
 export function createQueuePanel(): HTMLElement {
     const el = document.createElement('div');
@@ -39,7 +38,6 @@ export function createQueuePanel(): HTMLElement {
  * @param extraClass - Modifier class(es), with leading space
  * @param num - Number column content (index or icon markup)
  * @param removable - Render a remove button
- * @returns 
  */
 function queueItem(t: WaveformBarTrack, index: number, extraClass: string, num: string | number, removable: boolean): string {
     const current = extraClass.includes('wb-queue-current') ? ' aria-current="true"' : '';

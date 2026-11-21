@@ -24,6 +24,37 @@ import {
 import {fireAction} from './actions.js';
 import {buildBarHTML} from './dom.js';
 import {createQueuePanel, renderQueue} from './queue.js';
+import type {
+    WaveformPlayer,
+    WaveformLifecycleEventDetail,
+    WaveformRequestEventDetail,
+    WaveformRequestSeekEventDetail,
+} from '@arraypress/waveform-player';
+import type {
+    WaveformBarConfig,
+    WaveformBarMarker,
+    WaveformBarRepeatMode,
+    WaveformBarResolvedConfig,
+    WaveformBarTheme,
+    WaveformBarTrack,
+} from './types.js';
+
+/**
+ * The embedded player as the bar uses it: it also reads the `<audio>` element,
+ * which the player's published types leave out.
+ */
+type EmbeddedPlayer = WaveformPlayer & {audio: HTMLAudioElement | null};
+
+/** A share link's target, parsed from the page URL by _readShareTarget(). */
+interface ShareTarget {
+    time: number;
+    id: string | null;
+    url: string | null;
+    title: string | null;
+    artist: string | null;
+}
+
+type Timer = ReturnType<typeof setTimeout>;
 
 /**
  * Default configuration
@@ -88,23 +119,99 @@ const DEFAULTS = {
     onShuffleChange: null,
     onFavorite: null,
     onCart: null
-};
+} satisfies WaveformBarConfig;
 
 /**
  * Resolve a public-API track argument (object or bare URL) to a normalized
  * queue entry, or null when it has no usable url.
- * @param {Object|string} trackOrUrl
- * @returns {Object|null}
+ * @param trackOrUrl
  */
-function toTrack(trackOrUrl) {
+function toTrack(trackOrUrl: WaveformBarTrack | string): WaveformBarTrack | null {
     return typeof trackOrUrl === 'string'
         ? normalizeTrack({url: trackOrUrl, id: trackOrUrl, title: extractTitle(trackOrUrl)})
         : normalizeTrack(trackOrUrl);
 }
 
 export class WaveformBar {
+    // Public state. `declare` emits nothing: every field is assigned in the
+    // constructor (or later) exactly as in 1.x.
+    declare queue: WaveformBarTrack[];
+    declare currentIndex: number;
+    declare isPlaying: boolean;
+    declare isInitialized: boolean;
+    declare queueOpen: boolean;
+    declare isCollapsed: boolean;
+    declare volume: number;
+    declare isMuted: boolean;
+    declare repeat: WaveformBarRepeatMode;
+    declare shuffle: boolean;
+
+    /**
+     * @internal The merged config. It is null before init() and after
+     * destroy(), but typed non-null: everything that reads it runs after init().
+     */
+    declare config: WaveformBarResolvedConfig;
+    /** @internal The embedded player. Public as getPlayer(). */
+    declare player: EmbeddedPlayer | null;
+
+    /** @internal */ declare _volumeBeforeMute: number;
+    /** @internal */ declare _lastPosition: number;
+    /** @internal */ declare _lastSaveTime: number;
+    /** @internal */ declare _favorites: Set<string>;
+    /** @internal */ declare _cartItems: Set<string>;
+    /** @internal */ declare _observer: MutationObserver | null;
+    /** @internal */ declare _observeTimeout: Timer | null | undefined;
+    /** @internal */ declare _activeMarkers: WaveformBarMarker[] | null;
+    /** @internal */ declare _currentMarkerIndex: number;
+    /** @internal */ declare _shufflePlayed: Set<string>;
+    /** @internal */ declare _loadSeq: number;
+    /** @internal */ declare _restoreSeekTimeout: Timer | null;
+    /** @internal */ declare _shareFlashTimeout: Timer | null | undefined;
+    /** @internal */ declare _externalPlayers: Map<string, Set<WaveformPlayer>>;
+    /** @internal */ declare _externalListenersBound: boolean;
+    /** @internal */ declare _onExtRequestPlay: ((e: CustomEvent<WaveformRequestEventDetail>) => void) | null;
+    /** @internal */ declare _onExtRequestPause: ((e: CustomEvent<WaveformRequestEventDetail>) => void) | null;
+    /** @internal */ declare _onExtRequestSeek: ((e: CustomEvent<WaveformRequestSeekEventDetail>) => void) | null;
+    /** @internal */ declare _onExtDestroy: ((e: CustomEvent<WaveformLifecycleEventDetail>) => void) | null;
+    /** @internal */ declare _shareTarget: ShareTarget | null;
+    /** @internal */ declare _shareSeek: number | null;
+    /** @internal */ declare _resolvedTheme: WaveformBarTheme;
+    /** @internal */ declare _beforeUnloadHandler: (() => void) | null;
+    /** @internal */ declare _visibilityHandler: (() => void) | null;
+    /** @internal */ declare _themeObserver: MutationObserver | null;
+    /** @internal */ declare _themeMq: MediaQueryList | null;
+    /** @internal */ declare _themeMqHandler: (() => void) | null;
+    /** @internal */ declare _barHeightObserver: ResizeObserver | null;
+    /** @internal */ declare _docClickVolume: ((e: MouseEvent) => void) | null;
+    /** @internal */ declare _docClickQueue: ((e: MouseEvent) => void) | null;
+    /** @internal */ declare _docKeydownQueue: ((e: KeyboardEvent) => void) | null;
+    /** @internal */ declare _docClickTriggers: ((e: MouseEvent) => void) | null;
+
+    // DOM refs
+    /** @internal */ declare barEl: HTMLElement | null;
+    /** @internal */ declare queueEl: HTMLElement | null;
+    /** @internal */ declare waveformContainer: HTMLElement | null;
+    /** @internal */ declare volumePopupEl: HTMLElement | null;
+    /** @internal */ declare titleEl: HTMLElement | null;
+    /** @internal */ declare artistEl: HTMLElement | null;
+    /** @internal */ declare metaEl: HTMLElement | null;
+    /** @internal */ declare playBtnEl: HTMLElement | null;
+    /** @internal */ declare repeatBtnEl: HTMLElement | null;
+    /** @internal */ declare shuffleBtnEl: HTMLElement | null;
+    /** @internal */ declare shareBtnEl: HTMLElement | null;
+    /** @internal */ declare collapseBtnEl: HTMLElement | null;
+    /** @internal */ declare queueBtnEl: HTMLElement | null;
+    /** @internal */ declare queueBodyEl: HTMLElement | null;
+    /** @internal */ declare queueCountEl: HTMLElement | null;
+    /** @internal */ declare volumeSliderEl: HTMLInputElement | null;
+    /** @internal */ declare muteBtnEl: HTMLElement | null;
+    /** @internal */ declare favBtnEl: HTMLElement | null;
+    /** @internal */ declare cartBtnEl: HTMLElement | null;
+    /** @internal */ declare timeCurrentEl: HTMLElement | null;
+    /** @internal */ declare timeTotalEl: HTMLElement | null;
+
     constructor() {
-        this.config = null;
+        this.config = null!;
         this.player = null;
         this.queue = [];
         this.currentIndex = -1;
@@ -164,13 +271,13 @@ export class WaveformBar {
 
     /**
      * Initialize WaveformBar
-     * @param {Object} [config={}]
-     * @returns {WaveformBar}
+     * @param config
      */
-    init(config = {}) {
+    init(config: WaveformBarConfig = {}): WaveformBar {
         if (this.isInitialized) this.destroy();
 
-        this.config = {...DEFAULTS, ...config};
+        // `mode` and `layout` are derived just below.
+        this.config = {...DEFAULTS, ...config} as WaveformBarResolvedConfig;
 
         // Normalize volume from config — guard NaN / out-of-range so a bad
         // value can't mute the player or throw downstream.
@@ -253,9 +360,8 @@ export class WaveformBar {
 
     /**
      * Destroy everything
-     * @returns {WaveformBar}
      */
-    destroy() {
+    destroy(): WaveformBar {
         // Flip every inline external player to paused before the map is
         // dropped below. The embedded player's teardown doesn't route back
         // through onPause, so without this they'd stay "playing" (and keep
@@ -296,10 +402,10 @@ export class WaveformBar {
         // anonymous and never removed. Stored on `this` so they can be torn
         // down and the bind flag reset for a clean re-init.
         if (this._externalListenersBound) {
-            document.removeEventListener('waveformplayer:request-play', this._onExtRequestPlay);
-            document.removeEventListener('waveformplayer:request-pause', this._onExtRequestPause);
-            document.removeEventListener('waveformplayer:request-seek', this._onExtRequestSeek);
-            document.removeEventListener('waveformplayer:destroy', this._onExtDestroy);
+            document.removeEventListener('waveformplayer:request-play', this._onExtRequestPlay as EventListener);
+            document.removeEventListener('waveformplayer:request-pause', this._onExtRequestPause as EventListener);
+            document.removeEventListener('waveformplayer:request-seek', this._onExtRequestSeek as EventListener);
+            document.removeEventListener('waveformplayer:destroy', this._onExtDestroy as EventListener);
             this._onExtRequestPlay = null;
             this._onExtRequestPause = null;
             this._onExtRequestSeek = null;
@@ -313,7 +419,7 @@ export class WaveformBar {
             clearTimeout(this._restoreSeekTimeout);
             this._restoreSeekTimeout = null;
         }
-        clearTimeout(this._shareFlashTimeout);
+        clearTimeout(this._shareFlashTimeout as Timer | undefined);
         this._shareFlashTimeout = null;
         // Invalidate any in-flight load continuation.
         this._loadSeq++;
@@ -330,7 +436,7 @@ export class WaveformBar {
             this._observer.disconnect();
             this._observer = null;
         }
-        clearTimeout(this._observeTimeout);
+        clearTimeout(this._observeTimeout as Timer | undefined);
         this._observeTimeout = null;
         if (this._barHeightObserver) {
             this._barHeightObserver.disconnect();
@@ -384,7 +490,7 @@ export class WaveformBar {
         this._currentMarkerIndex = -1;
         this._shufflePlayed = new Set();
         this.isInitialized = false;
-        this.config = null;
+        this.config = null!;
         return this;
     }
 
@@ -392,6 +498,7 @@ export class WaveformBar {
     // DOM Setup (private)
     // =====================================================================
 
+    /** @internal */
     _createBar() {
         this.barEl = document.createElement('div');
         this.barEl.className = 'waveform-bar';
@@ -422,23 +529,23 @@ export class WaveformBar {
         document.body.appendChild(this.barEl);
 
         // Cache refs
-        this.titleEl = this.barEl.querySelector('.wb-title');
-        this.artistEl = this.barEl.querySelector('.wb-artist');
-        this.metaEl = this.barEl.querySelector('.wb-meta');
-        this.playBtnEl = this.barEl.querySelector('.wb-play');
-        this.waveformContainer = this.barEl.querySelector('.wb-waveform-container');
-        this.queueBtnEl = this.barEl.querySelector('.wb-queue-btn');
-        this.shareBtnEl = this.barEl.querySelector('.wb-share');
-        this.muteBtnEl = this.barEl.querySelector('.wb-mute');
-        this.volumeSliderEl = this.barEl.querySelector('.wb-volume-slider');
-        this.favBtnEl = this.barEl.querySelector('.wb-fav');
-        this.cartBtnEl = this.barEl.querySelector('.wb-cart');
-        this.timeCurrentEl = this.barEl.querySelector('.wb-time-current');
-        this.timeTotalEl = this.barEl.querySelector('.wb-time-total');
-        this.collapseBtnEl = this.barEl.querySelector('.wb-collapse');
+        this.titleEl = this.barEl.querySelector<HTMLElement>('.wb-title');
+        this.artistEl = this.barEl.querySelector<HTMLElement>('.wb-artist');
+        this.metaEl = this.barEl.querySelector<HTMLElement>('.wb-meta');
+        this.playBtnEl = this.barEl.querySelector<HTMLElement>('.wb-play');
+        this.waveformContainer = this.barEl.querySelector<HTMLElement>('.wb-waveform-container');
+        this.queueBtnEl = this.barEl.querySelector<HTMLElement>('.wb-queue-btn');
+        this.shareBtnEl = this.barEl.querySelector<HTMLElement>('.wb-share');
+        this.muteBtnEl = this.barEl.querySelector<HTMLElement>('.wb-mute');
+        this.volumeSliderEl = this.barEl.querySelector<HTMLInputElement>('.wb-volume-slider');
+        this.favBtnEl = this.barEl.querySelector<HTMLElement>('.wb-fav');
+        this.cartBtnEl = this.barEl.querySelector<HTMLElement>('.wb-cart');
+        this.timeCurrentEl = this.barEl.querySelector<HTMLElement>('.wb-time-current');
+        this.timeTotalEl = this.barEl.querySelector<HTMLElement>('.wb-time-total');
+        this.collapseBtnEl = this.barEl.querySelector<HTMLElement>('.wb-collapse');
 
         // Bind controls
-        this.playBtnEl.addEventListener('click', () => this.togglePlay());
+        this.playBtnEl!.addEventListener('click', () => this.togglePlay());
 
         // Collapse-to-pill toggle.
         if (this.collapseBtnEl) {
@@ -456,7 +563,7 @@ export class WaveformBar {
         // (same as shuffle below), so `{ repeat: 'all', showRepeat: false }`
         // still loops. Unknown values fall back to 'off'.
         this.repeat = ['off', 'all', 'one'].includes(this.config.repeat) ? this.config.repeat : 'off';
-        this.repeatBtnEl = this.barEl.querySelector('.wb-repeat');
+        this.repeatBtnEl = this.barEl.querySelector<HTMLElement>('.wb-repeat');
         if (this.repeatBtnEl) {
             this._updateRepeatButton();
             this.repeatBtnEl.addEventListener('click', () => this.cycleRepeat());
@@ -465,7 +572,7 @@ export class WaveformBar {
         // Seed shuffle from config regardless of whether the toggle button is
         // shown, so `{ shuffle: true, showShuffle: false }` still randomises advance.
         this.shuffle = !!this.config.shuffle;
-        this.shuffleBtnEl = this.barEl.querySelector('.wb-shuffle');
+        this.shuffleBtnEl = this.barEl.querySelector<HTMLElement>('.wb-shuffle');
         if (this.shuffleBtnEl) {
             this._updateShuffleButton();
             this.shuffleBtnEl.addEventListener('click', () => this.toggleShuffle());
@@ -474,7 +581,7 @@ export class WaveformBar {
         if (this.queueBtnEl) this.queueBtnEl.addEventListener('click', () => this.toggleQueuePanel());
 
         // Volume: click mutes, hover shows popup
-        this.volumePopupEl = this.barEl.querySelector('.wb-volume-popup');
+        this.volumePopupEl = this.barEl.querySelector<HTMLElement>('.wb-volume-popup');
         const volumeWrapper = this.barEl.querySelector('.wb-volume');
 
         if (this.muteBtnEl) {
@@ -485,7 +592,7 @@ export class WaveformBar {
         }
 
         if (volumeWrapper && this.volumePopupEl) {
-            let hoverTimeout;
+            let hoverTimeout: Timer | undefined;
             volumeWrapper.addEventListener('mouseenter', () => {
                 clearTimeout(hoverTimeout);
                 this.openVolumePopup();
@@ -498,7 +605,7 @@ export class WaveformBar {
         if (this.volumeSliderEl) {
             this.volumeSliderEl.addEventListener('input', (e) => {
                 e.stopPropagation();
-                this.setVolume(parseInt(e.target.value) / 100);
+                this.setVolume(parseInt((e.target as HTMLInputElement).value) / 100);
             });
         }
 
@@ -507,7 +614,7 @@ export class WaveformBar {
         // re-init (init() calls destroy() first) leaks another listener.
         this._docClickVolume = (e) => {
             if (this.volumePopupEl?.classList.contains('wb-volume-open') &&
-                !this.barEl?.querySelector('.wb-volume')?.contains(e.target)) {
+                !this.barEl?.querySelector('.wb-volume')?.contains(e.target as Node | null)) {
                 this.closeVolumePopup();
             }
         };
@@ -518,7 +625,7 @@ export class WaveformBar {
 
         // Track link
         if (this.config.showTrackLink) {
-            this.barEl.querySelector('.wb-track').addEventListener('click', () => {
+            this.barEl.querySelector('.wb-track')!.addEventListener('click', () => {
                 const t = this.getCurrentTrack();
                 // Guard the scheme — a `data-wb-link="javascript:…"` value
                 // would otherwise execute on navigation (open-redirect / XSS).
@@ -527,6 +634,7 @@ export class WaveformBar {
         }
     }
 
+    /** @internal */
     _createQueue() {
         if (!this.config.showQueue) return;
 
@@ -546,15 +654,15 @@ export class WaveformBar {
             this._barHeightObserver.observe(this.barEl);
         }
 
-        this.queueBodyEl = this.queueEl.querySelector('.wb-queue-body');
-        this.queueCountEl = this.queueEl.querySelector('.wb-queue-count');
+        this.queueBodyEl = this.queueEl.querySelector<HTMLElement>('.wb-queue-body');
+        this.queueCountEl = this.queueEl.querySelector<HTMLElement>('.wb-queue-count');
 
-        this.queueEl.querySelector('.wb-queue-clear').addEventListener('click', () => this.clearQueue());
+        this.queueEl.querySelector('.wb-queue-clear')!.addEventListener('click', () => this.clearQueue());
 
         // Stored on `this` so destroy() can remove it — otherwise every
         // re-init leaks another document listener.
         this._docClickQueue = (e) => {
-            if (this.queueOpen && !this.queueEl?.contains(e.target) && !this.queueBtnEl?.contains(e.target)) {
+            if (this.queueOpen && !this.queueEl?.contains(e.target as Node | null) && !this.queueBtnEl?.contains(e.target as Node | null)) {
                 this.closeQueuePanel();
             }
         };
@@ -570,8 +678,10 @@ export class WaveformBar {
         document.addEventListener('keydown', this._docKeydownQueue);
     }
 
+    /** @internal */
     _initPlayer() {
-        const opts = {
+        // Typed loosely: the bar forwards `null` for "the player's default".
+        const opts: Record<string, any> = {
             showControls: false,
             showInfo: false,
             // Classic mode reuses the player's own built-in 'seekbar' style —
@@ -682,7 +792,7 @@ export class WaveformBar {
                     this._loadCurrentTrack();
                 }
             },
-            onTimeUpdate: (currentTime, duration) => {
+            onTimeUpdate: (currentTime: number, duration: number) => {
                 this._lastPosition = currentTime;
                 if (this.timeCurrentEl) this.timeCurrentEl.textContent = formatTime(currentTime);
                 if (this.timeTotalEl) this.timeTotalEl.textContent = formatTime(duration);
@@ -726,7 +836,7 @@ export class WaveformBar {
         opts.onNextTrack = () => this.next();
         opts.onPreviousTrack = () => this.previous();
 
-        this.player = new window.WaveformPlayer(this.waveformContainer, opts);
+        this.player = new window.WaveformPlayer(this.waveformContainer!, opts) as EmbeddedPlayer;
         this.player.setVolume(this.volume);
     }
 
@@ -734,6 +844,7 @@ export class WaveformBar {
     // Triggers (private)
     // =====================================================================
 
+    /** @internal */
     _bindTriggers() {
         // ONE delegated document listener instead of per-element binding.
         // Per-element listeners leaked on every re-init (init() → destroy()
@@ -755,7 +866,7 @@ export class WaveformBar {
                 // Queue first — a queue trigger nested in (or alongside) a
                 // play trigger must enqueue, not play. This mirrors the old
                 // per-element handler's stopPropagation() semantics.
-                const queueEl = e.target?.closest?.('[data-wb-queue]');
+                const queueEl = (e.target as Element | null)?.closest?.<HTMLElement>('[data-wb-queue]');
                 if (queueEl) {
                     e.preventDefault();
                     const track = parseTrackFromElement(queueEl);
@@ -763,7 +874,7 @@ export class WaveformBar {
                     return;
                 }
 
-                const playEl = e.target?.closest?.('[data-wb-play]');
+                const playEl = (e.target as Element | null)?.closest?.<HTMLElement>('[data-wb-play]');
                 if (playEl) {
                     e.preventDefault();
                     const track = parseTrackFromElement(playEl);
@@ -792,7 +903,7 @@ export class WaveformBar {
      * Idempotent — safe to call repeatedly. Late-mounted players are
      * picked up by the MutationObserver in _observeDOM().
      *
-     * @private
+     * @internal
      */
     _attachExternalPlayers() {
         // Document-level listeners only bind once. Stored on `this` so
@@ -814,7 +925,7 @@ export class WaveformBar {
                 // richer data-wb-* metadata (real id, link, meta…) in here. The
                 // player's own non-empty fields still win over the trigger's
                 // fallbacks (e.g. a title derived from the URL).
-                const triggerEl = e.target?.closest?.('[data-wb-play], [data-wb-queue]');
+                const triggerEl = (e.target as Element | null)?.closest?.<HTMLElement>('[data-wb-play], [data-wb-queue]');
                 const fromTrigger = triggerEl ? parseTrackFromElement(triggerEl) : null;
                 if (fromTrigger && fromTrigger.url === track.url) track = mergeTrack(fromTrigger, track);
                 this.play(track);
@@ -850,10 +961,10 @@ export class WaveformBar {
                 this._externalPlayers.forEach((set) => set.delete(inst));
             };
 
-            document.addEventListener('waveformplayer:request-play', this._onExtRequestPlay);
-            document.addEventListener('waveformplayer:request-pause', this._onExtRequestPause);
-            document.addEventListener('waveformplayer:request-seek', this._onExtRequestSeek);
-            document.addEventListener('waveformplayer:destroy', this._onExtDestroy);
+            document.addEventListener('waveformplayer:request-play', this._onExtRequestPlay as EventListener);
+            document.addEventListener('waveformplayer:request-pause', this._onExtRequestPause as EventListener);
+            document.addEventListener('waveformplayer:request-seek', this._onExtRequestSeek as EventListener);
+            document.addEventListener('waveformplayer:destroy', this._onExtDestroy as EventListener);
         }
 
         // Rebuild the URL → players map from scratch each pass — cheap
@@ -874,17 +985,17 @@ export class WaveformBar {
             if (p && p.container) byContainer.set(p.container, p);
         });
 
-        const newlyDiscovered = [];
+        const newlyDiscovered: {inst: WaveformPlayer; url: string}[] = [];
         document.querySelectorAll('[data-waveform-player][data-audio-mode="external"]').forEach((el) => {
             const inst = byContainer.get(el);
             if (!inst || !inst.options || !inst.options.url) return;
             const url = inst.options.url;
             if (!this._externalPlayers.has(url)) this._externalPlayers.set(url, new Set());
-            this._externalPlayers.get(url).add(inst);
+            this._externalPlayers.get(url)!.add(inst);
             // Track players that weren't in the previous map — those need
             // initial state seeded so cross-page navigation (bar already
             // playing when an inline player mounts) syncs correctly.
-            const wasKnown = previous.get(url) && previous.get(url).has(inst);
+            const wasKnown = previous.get(url) && previous.get(url)!.has(inst);
             if (!wasKnown) newlyDiscovered.push({inst, url});
         });
 
@@ -913,12 +1024,11 @@ export class WaveformBar {
      * `[data-waveform-player]` element that never mounted (or runs in self
      * mode) emits no request-* events, so its trigger clicks must still work.
      *
-     * @private
-     * @param {EventTarget|null} target
-     * @returns {boolean}
+     * @internal
+     * @param target
      */
-    _isInsideExternalPlayer(target) {
-        const el = target?.closest?.('[data-waveform-player]');
+    _isInsideExternalPlayer(target: EventTarget | null): boolean {
+        const el = (target as Element | null)?.closest?.('[data-waveform-player]');
         if (!el || !this._externalPlayers) return false;
         for (const set of this._externalPlayers.values()) {
             for (const inst of set) {
@@ -935,10 +1045,10 @@ export class WaveformBar {
      * and the previously-current external player should stop showing
      * its play indicator.
      *
-     * @private
-     * @param {boolean} playing
+     * @internal
+     * @param playing
      */
-    _pumpExternalPlayState(playing) {
+    _pumpExternalPlayState(playing: boolean) {
         if (!this._externalPlayers || this._externalPlayers.size === 0) return;
         const current = this.getCurrentTrack();
         const currentUrl = current ? current.url : null;
@@ -957,11 +1067,11 @@ export class WaveformBar {
      * player(s) tracking the current URL. Called on every timeupdate
      * tick of the internal player.
      *
-     * @private
-     * @param {number} currentTime
-     * @param {number} duration
+     * @internal
+     * @param currentTime
+     * @param duration
      */
-    _pumpExternalProgress(currentTime, duration) {
+    _pumpExternalProgress(currentTime: number, duration: number) {
         if (!this._externalPlayers || this._externalPlayers.size === 0) return;
         const current = this.getCurrentTrack();
         if (!current) return;
@@ -974,6 +1084,7 @@ export class WaveformBar {
         });
     }
 
+    /** @internal */
     _observeDOM() {
         if (typeof MutationObserver === 'undefined') return;
         // Triggers are handled by the single delegated listener, so the
@@ -987,7 +1098,7 @@ export class WaveformBar {
         // rescans once.
         this._observer = new MutationObserver((mutations) => {
             if (mutations.every(m => this._isOwnMutation(m.target))) return;
-            clearTimeout(this._observeTimeout);
+            clearTimeout(this._observeTimeout as Timer | undefined);
             this._observeTimeout = setTimeout(() => {
                 this._observeTimeout = null;
                 this._attachExternalPlayers();
@@ -1000,11 +1111,10 @@ export class WaveformBar {
     /**
      * Whether a mutated node belongs to DOM the bar itself keeps updating: the
      * bar, its queue panel, or a registered inline player's own markup.
-     * @private
-     * @param {Node} node
-     * @returns {boolean}
+     * @internal
+     * @param node
      */
-    _isOwnMutation(node) {
+    _isOwnMutation(node: Node): boolean {
         if (this.barEl?.contains(node) || this.queueEl?.contains(node)) return true;
         const el = node.nodeType === 1 ? node : node.parentElement;
         return !!el && this._isInsideExternalPlayer(el);
@@ -1016,10 +1126,9 @@ export class WaveformBar {
 
     /**
      * Play a track immediately
-     * @param {Object|string} trackOrUrl
-     * @returns {WaveformBar}
+     * @param trackOrUrl
      */
-    play(trackOrUrl) {
+    play(trackOrUrl: WaveformBarTrack | string): WaveformBar {
         const track = toTrack(trackOrUrl);
         if (!track) return this;
 
@@ -1048,10 +1157,9 @@ export class WaveformBar {
 
     /**
      * Add to end of queue
-     * @param {Object|string} trackOrUrl
-     * @returns {WaveformBar}
+     * @param trackOrUrl
      */
-    addToQueue(trackOrUrl) {
+    addToQueue(trackOrUrl: WaveformBarTrack | string): WaveformBar {
         const track = toTrack(trackOrUrl);
         if (!track) return this;
         if (this.queue.find(t => t.url === track.url)) return this;
@@ -1082,7 +1190,7 @@ export class WaveformBar {
      * autoplay (NotAllowedError) or an unplayable source rejects the promise;
      * uncaught, that was an unhandled rejection, and if the 'play' event had
      * already flipped `isPlaying` the bar stayed showing "playing" forever.
-     * @private
+     * @internal
      */
     _playSafely() {
         const restore = () => {
@@ -1138,7 +1246,7 @@ export class WaveformBar {
         return this;
     }
 
-    skipTo(index) {
+    skipTo(index: number): WaveformBar {
         if (index < 0 || index >= this.queue.length) return this;
         if (index === this.currentIndex) {
             this.togglePlay();
@@ -1151,10 +1259,9 @@ export class WaveformBar {
 
     /**
      * Seek to a specific marker by index on the current track
-     * @param {number} markerIndex
-     * @returns {WaveformBar}
+     * @param markerIndex
      */
-    seekToMarker(markerIndex) {
+    seekToMarker(markerIndex: number): WaveformBar {
         if (!this._activeMarkers || markerIndex < 0 || markerIndex >= this._activeMarkers.length) return this;
         const marker = this._activeMarkers[markerIndex];
         if (this.player) {
@@ -1166,10 +1273,9 @@ export class WaveformBar {
 
     /**
      * Seek to a marker by label on the current track
-     * @param {string} label
-     * @returns {WaveformBar}
+     * @param label
      */
-    seekToMarkerByLabel(label) {
+    seekToMarkerByLabel(label: string): WaveformBar {
         if (!this._activeMarkers) return this;
         const index = this._activeMarkers.findIndex(m =>
             (m.label || m.title || '').toLowerCase() === label.toLowerCase()
@@ -1182,7 +1288,7 @@ export class WaveformBar {
     // Volume (public)
     // =====================================================================
 
-    setVolume(level) {
+    setVolume(level: number): WaveformBar {
         this.volume = Math.max(0, Math.min(1, level));
         this.isMuted = this.volume === 0;
         if (this.player) this.player.setVolume(this.volume);
@@ -1193,7 +1299,7 @@ export class WaveformBar {
         return this;
     }
 
-    getVolume() {
+    getVolume(): number {
         return this.volume;
     }
 
@@ -1275,7 +1381,7 @@ export class WaveformBar {
         return this;
     }
 
-    isFavorited(id) {
+    isFavorited(id?: string | null): boolean {
         if (!id) {
             const t = this.getCurrentTrack();
             id = t ? (t.id || t.url) : null;
@@ -1283,7 +1389,7 @@ export class WaveformBar {
         return id ? this._favorites.has(id) : false;
     }
 
-    isInCart(id) {
+    isInCart(id?: string | null): boolean {
         if (!id) {
             const t = this.getCurrentTrack();
             id = t ? (t.id || t.url) : null;
@@ -1295,7 +1401,7 @@ export class WaveformBar {
     // Queue (public)
     // =====================================================================
 
-    removeFromQueue(index) {
+    removeFromQueue(index: number): WaveformBar {
         if (index < 0 || index >= this.queue.length || index === this.currentIndex) return this;
         this.queue.splice(index, 1);
         if (index < this.currentIndex) this.currentIndex--;
@@ -1320,29 +1426,29 @@ export class WaveformBar {
         return this;
     }
 
-    getCurrentTrack() {
+    getCurrentTrack(): WaveformBarTrack | null {
         return (this.currentIndex >= 0 && this.currentIndex < this.queue.length) ? this.queue[this.currentIndex] : null;
     }
 
-    getQueue() {
+    getQueue(): WaveformBarTrack[] {
         return [...this.queue];
     }
 
-    getCurrentIndex() {
+    getCurrentIndex(): number {
         return this.currentIndex;
     }
 
-    isCurrentlyPlaying(url) {
+    isCurrentlyPlaying(url: string): boolean | null {
         const c = this.getCurrentTrack();
         return this.isPlaying && c && c.url === url;
     }
 
-    isCurrentTrack(url) {
+    isCurrentTrack(url: string): boolean | null {
         const c = this.getCurrentTrack();
         return c && c.url === url;
     }
 
-    getPlayer() {
+    getPlayer(): WaveformPlayer | null {
         return this.player;
     }
 
@@ -1364,11 +1470,11 @@ export class WaveformBar {
      * - waveformbar:queuechange { queue, currentIndex }
      * - waveformbar:volumechange { volume }
      *
-     * @private
-     * @param {string} name - Event name (without prefix)
-     * @param {Object} detail - Event detail data
+     * @internal
+     * @param name - Event name (without prefix)
+     * @param detail - Event detail data
      */
-    _emit(name, detail = {}) {
+    _emit(name: string, detail: object = {}): void {
         if (!this.barEl) return;
         this.barEl.dispatchEvent(new CustomEvent('waveformbar:' + name, {
             bubbles: true,
@@ -1468,10 +1574,9 @@ export class WaveformBar {
      * `?wu` (url, the works-anywhere fallback), and `?wtitle`/`?wartist` for
      * display before metadata arrives. Returns null when no share params are
      * present. An unsafe `?wu` (javascript:/data: etc.) is dropped, not loaded.
-     * @returns {{time:number, id:string|null, url:string|null, title:string|null, artist:string|null}|null}
-     * @private
+     * @internal
      */
-    _readShareTarget() {
+    _readShareTarget(): ShareTarget | null {
         let q;
         try {
             q = new URLSearchParams(window.location.search);
@@ -1501,12 +1606,11 @@ export class WaveformBar {
      * page's pre-generated peaks, markers, and favorite/cart state; falls back
      * to a minimal track built from the embedded url + title/artist so the link
      * still works on a page that doesn't contain the track.
-     * @param {{id:string|null, url:string|null, title:string|null, artist:string|null}} target
-     * @returns {Object|null}
-     * @private
+     * @param target
+     * @internal
      */
-    _resolveSharedTrack(target) {
-        const triggers = document.querySelectorAll('[data-wb-play], [data-wb-queue]');
+    _resolveSharedTrack(target: ShareTarget): WaveformBarTrack | null {
+        const triggers = document.querySelectorAll<HTMLElement>('[data-wb-play], [data-wb-queue]');
 
         // 1. By id (clean, short links). Skips when no id was shared.
         if (target.id) {
@@ -1542,11 +1646,11 @@ export class WaveformBar {
      * Cold-load a share-target track at a timestamp, paused. Mirrors the
      * restore path (loadTrack with autoplay:false + a `_loadSeq`-guarded,
      * delayed seek) so a later user action cleanly supersedes it.
-     * @param {Object} track
-     * @param {number} time - seconds to seek to once loaded
-     * @private
+     * @param track
+     * @param time - seconds to seek to once loaded
+     * @internal
      */
-    _loadSharedTrack(track, time) {
+    _loadSharedTrack(track: WaveformBarTrack, time: number): void {
         if (!track || !track.url || !this.player) return;
 
         // Make it the current queue entry (dedup by url, like play()).
@@ -1564,7 +1668,7 @@ export class WaveformBar {
         this._updateFavoriteUI();
         this._updateNavButtons();
 
-        const loadOpts = {autoplay: false};
+        const loadOpts: Record<string, any> = {autoplay: false};
         if (track.waveform) loadOpts.waveform = track.waveform;
         if (track.markers && track.markers.length) {
             const defaultColor = this.config.markerColor;
@@ -1617,7 +1721,7 @@ export class WaveformBar {
      * loads the right audio: `?<shareParam>=<seconds>` plus `wid` (id, when the
      * track has a real one), `wu` (url — the works-anywhere fallback), and
      * `wtitle`/`wartist` for display before metadata loads.
-     * @private
+     * @internal
      */
     _share() {
         const track = this.getCurrentTrack();
@@ -1652,13 +1756,13 @@ export class WaveformBar {
 
     /**
      * Briefly flag the share button as "copied" for visual feedback.
-     * @private
+     * @internal
      */
     _flashShareCopied() {
         if (!this.shareBtnEl) return;
         this.shareBtnEl.classList.add('wb-copied');
         this.shareBtnEl.setAttribute('title', 'Link copied!');
-        clearTimeout(this._shareFlashTimeout);
+        clearTimeout(this._shareFlashTimeout as Timer | undefined);
         this._shareFlashTimeout = setTimeout(() => {
             if (this.shareBtnEl) {
                 this.shareBtnEl.classList.remove('wb-copied');
@@ -1669,9 +1773,8 @@ export class WaveformBar {
 
     /**
      * Collapse the bar to a small floating pill (artwork + play + expand).
-     * @returns {WaveformBar}
      */
-    collapse() {
+    collapse(): WaveformBar {
         this.isCollapsed = true;
         if (this.barEl) this.barEl.classList.add('wb-collapsed');
         this._updateCollapseButton();
@@ -1682,9 +1785,8 @@ export class WaveformBar {
 
     /**
      * Restore the bar from its collapsed pill back to the full bar.
-     * @returns {WaveformBar}
      */
-    expand() {
+    expand(): WaveformBar {
         this.isCollapsed = false;
         if (this.barEl) this.barEl.classList.remove('wb-collapsed');
         this._updateCollapseButton();
@@ -1695,15 +1797,14 @@ export class WaveformBar {
 
     /**
      * Toggle the collapsed pill state.
-     * @returns {WaveformBar}
      */
-    toggleCollapse() {
+    toggleCollapse(): WaveformBar {
         return this.isCollapsed ? this.expand() : this.collapse();
     }
 
     /**
      * Swap the collapse button's icon + labels for the current state.
-     * @private
+     * @internal
      */
     _updateCollapseButton() {
         if (!this.collapseBtnEl) return;
@@ -1714,7 +1815,7 @@ export class WaveformBar {
         this.collapseBtnEl.setAttribute('aria-expanded', this.isCollapsed ? 'false' : 'true');
     }
 
-    /** Persist the collapsed state (session-scoped) when persistence is on. @private */
+    /** Persist the collapsed state (session-scoped) when persistence is on. @internal */
     _saveCollapsed() {
         if (!this.config.persist) return;
         try {
@@ -1722,8 +1823,8 @@ export class WaveformBar {
         } catch (e) {}
     }
 
-    /** Read the persisted collapsed state. @returns {boolean} @private */
-    _readCollapsed() {
+    /** Read the persisted collapsed state. @internal */
+    _readCollapsed(): boolean {
         if (!this.config.persist) return false;
         try {
             return sessionStorage.getItem(this.config.storageKey + '-collapsed') === '1';
@@ -1732,6 +1833,7 @@ export class WaveformBar {
         }
     }
 
+    /** @internal */
     _loadCurrentTrack() {
         const track = this.getCurrentTrack();
         if (!track || !this.player) return;
@@ -1763,7 +1865,7 @@ export class WaveformBar {
         this._updateTrackDisplay(track);
         this._updateFavoriteUI();
 
-        const loadOpts = {artwork: track.artwork, album: track.album};
+        const loadOpts: Record<string, any> = {artwork: track.artwork, album: track.album};
 
         // Pass pre-existing waveform data if available
         if (track.waveform) {
@@ -1800,11 +1902,12 @@ export class WaveformBar {
         if (this.config.onTrackChange) this.config.onTrackChange(track, this.currentIndex);
     }
 
-    _updateTrackDisplay(track) {
+    /** @internal */
+    _updateTrackDisplay(track: WaveformBarTrack): void {
         if (this.titleEl) this._setScrollText(this.titleEl, track.title || 'Untitled');
         if (this.artistEl) this._setScrollText(this.artistEl, track.artist || '');
 
-        const artworkEl = this.barEl.querySelector('.wb-artwork');
+        const artworkEl = this.barEl!.querySelector('.wb-artwork');
         if (artworkEl) {
             const artworkUrl = track.artwork || this.config.defaultArtwork;
             artworkEl.innerHTML = artworkUrl
@@ -1814,7 +1917,7 @@ export class WaveformBar {
 
         if (this.metaEl && this.config.showMeta) this._renderMeta(track);
 
-        const trackEl = this.barEl.querySelector('.wb-track');
+        const trackEl = this.barEl!.querySelector<HTMLElement>('.wb-track');
         if (trackEl) trackEl.style.cursor = track.link ? 'pointer' : 'default';
 
         // Reset time
@@ -1824,9 +1927,9 @@ export class WaveformBar {
 
     /**
      * Set text on an element with auto-scroll if it overflows.
-     * @private
+     * @internal
      */
-    _setScrollText(el, text) {
+    _setScrollText(el: HTMLElement, text: string): void {
         el.classList.remove('wb-scrolling');
         el.textContent = text;
 
@@ -1843,9 +1946,10 @@ export class WaveformBar {
         });
     }
 
-    _renderMeta(track) {
+    /** @internal */
+    _renderMeta(track: WaveformBarTrack): void {
         if (!this.metaEl) return;
-        const tags = [];
+        const tags: {label: string | number; type: string}[] = [];
         if (track.bpm) tags.push({label: track.bpm + ' BPM', type: 'bpm'});
         if (track.key) tags.push({label: track.key, type: 'key'});
         if (track.duration) tags.push({label: track.duration, type: 'duration'});
@@ -1861,15 +1965,17 @@ export class WaveformBar {
         ).join('');
     }
 
+    /** @internal */
     _updatePlayButton() {
         if (!this.playBtnEl) return;
-        const play = this.playBtnEl.querySelector('.wb-icon-play');
-        const pause = this.playBtnEl.querySelector('.wb-icon-pause');
+        const play = this.playBtnEl.querySelector<HTMLElement>('.wb-icon-play');
+        const pause = this.playBtnEl.querySelector<HTMLElement>('.wb-icon-pause');
         if (play) play.style.display = this.isPlaying ? 'none' : 'block';
         if (pause) pause.style.display = this.isPlaying ? 'block' : 'none';
         this.playBtnEl.title = this.isPlaying ? 'Pause' : 'Play';
     }
 
+    /** @internal */
     _updateNavButtons() {
         const prevBtn = this.barEl?.querySelector('.wb-prev');
         const nextBtn = this.barEl?.querySelector('.wb-next');
@@ -1893,10 +1999,9 @@ export class WaveformBar {
 
     /**
      * Cycle through repeat modes: off → all → one → off
-     * @returns {WaveformBar}
      */
-    cycleRepeat() {
-        const modes = ['off', 'all', 'one'];
+    cycleRepeat(): WaveformBar {
+        const modes: WaveformBarRepeatMode[] = ['off', 'all', 'one'];
         const current = modes.indexOf(this.repeat);
         this.repeat = modes[(current + 1) % modes.length];
         this._updateRepeatButton();
@@ -1907,10 +2012,9 @@ export class WaveformBar {
 
     /**
      * Set repeat mode directly
-     * @param {'off'|'all'|'one'} mode
-     * @returns {WaveformBar}
+     * @param mode
      */
-    setRepeat(mode) {
+    setRepeat(mode: WaveformBarRepeatMode): WaveformBar {
         if (['off', 'all', 'one'].includes(mode)) {
             this.repeat = mode;
             this._updateRepeatButton();
@@ -1920,7 +2024,7 @@ export class WaveformBar {
         return this;
     }
 
-    /** @private */
+    /** @internal */
     _updateRepeatButton() {
         if (!this.repeatBtnEl) return;
         const icons = {off: ICONS.repeatOff, all: ICONS.repeatAll, one: ICONS.repeatOne};
@@ -1936,18 +2040,16 @@ export class WaveformBar {
 
     /**
      * Toggle shuffle (random queue advance) on / off.
-     * @returns {WaveformBar}
      */
-    toggleShuffle() {
+    toggleShuffle(): WaveformBar {
         return this.setShuffle(!this.shuffle);
     }
 
     /**
      * Set shuffle on / off directly.
-     * @param {boolean} on
-     * @returns {WaveformBar}
+     * @param on
      */
-    setShuffle(on) {
+    setShuffle(on: boolean): WaveformBar {
         const wasOn = this.shuffle;
         this.shuffle = !!on;
         // Switching shuffle on starts a fresh pass from the current track.
@@ -1962,7 +2064,7 @@ export class WaveformBar {
         return this;
     }
 
-    /** @private */
+    /** @internal */
     _updateShuffleButton() {
         if (!this.shuffleBtnEl) return;
         this.shuffleBtnEl.title = this.shuffle ? 'Shuffle: On' : 'Shuffle: Off';
@@ -1973,11 +2075,10 @@ export class WaveformBar {
     /**
      * Pick a random queue index that isn't the current track and hasn't been
      * played in this shuffle pass. -1 when none is left.
-     * @returns {number}
-     * @private
+     * @internal
      */
-    _randomIndex() {
-        const candidates = [];
+    _randomIndex(): number {
+        const candidates: number[] = [];
         this.queue.forEach((t, i) => {
             if (i !== this.currentIndex && !this._shufflePlayed.has(t.url)) candidates.push(i);
         });
@@ -1988,10 +2089,9 @@ export class WaveformBar {
     /**
      * The shuffle advance: a random upcoming track, or — once every track has
      * played — a fresh pass under repeat 'all', else -1 (stop).
-     * @returns {number}
-     * @private
+     * @internal
      */
-    _nextShuffleIndex() {
+    _nextShuffleIndex(): number {
         let i = this._randomIndex();
         if (i < 0 && this.repeat === 'all') {
             const current = this.getCurrentTrack();
@@ -2006,9 +2106,9 @@ export class WaveformBar {
      * and update the bar's title/artist/artwork/meta display.
      * Markers should be sorted by time and can include:
      * { time, label, title, artist, artwork, bpm, key }
-     * @private
+     * @internal
      */
-    _checkMarkerBoundary(currentTime) {
+    _checkMarkerBoundary(currentTime: number): void {
         if (!this._activeMarkers) return;
 
         // Find the active marker (last marker whose time <= currentTime)
@@ -2041,7 +2141,7 @@ export class WaveformBar {
 
         // Update artwork if provided
         if (marker.artwork) {
-            const artworkEl = this.barEl.querySelector('.wb-artwork');
+            const artworkEl = this.barEl!.querySelector('.wb-artwork');
             if (artworkEl) artworkEl.innerHTML = `<img src="${escapeHtml(marker.artwork)}" alt="${escapeHtml(marker.title || '')}" />`;
         }
 
@@ -2051,16 +2151,17 @@ export class WaveformBar {
                 ...(track || {}),
                 bpm: marker.bpm || '',
                 key: marker.key || ''
-            };
+            } as WaveformBarTrack;
             this._renderMeta(metaTrack);
         }
 
         this._emit('markerchange', {marker, index: markerIndex, track});
     }
 
+    /** @internal */
     _updateVolumeUI() {
         if (this.volumeSliderEl) {
-            this.volumeSliderEl.value = this.isMuted ? 0 : Math.round(this.volume * 100);
+            (this.volumeSliderEl as any).value = this.isMuted ? 0 : Math.round(this.volume * 100);
         }
         if (this.muteBtnEl) {
             if (this.isMuted || this.volume === 0) {
@@ -2089,10 +2190,9 @@ export class WaveformBar {
      * which don't expose `utils.detectColorScheme`; it can go once the peer
      * range moves past that.
      *
-     * @private
-     * @returns {'dark'|'light'}
+     * @internal
      */
-    _detectTheme() {
+    _detectTheme(): 'dark' | 'light' {
         // Detect against <body>, never against `this.barEl`: the bar paints its
         // own `--wb-bg`, so starting the backdrop walk there would just read
         // back the theme it already has. The bar is position:fixed over the
@@ -2109,10 +2209,9 @@ export class WaveformBar {
     /**
      * Theme detection for older `@arraypress/waveform-player` builds.
      * Mirrors that package's `detectColorScheme` — keep the two in step.
-     * @private
-     * @returns {'dark'|'light'}
+     * @internal
      */
-    _detectThemeFallback() {
+    _detectThemeFallback(): 'dark' | 'light' {
         const root = document.documentElement;
         const body = document.body;
 
@@ -2139,8 +2238,8 @@ export class WaveformBar {
             let sum = 0;
             let alpha = 0;
 
-            for (let node = body; node && node.nodeType === 1 && alpha < 0.995; node = node.parentElement) {
-                const c = getComputedStyle(node).backgroundColor.match(/rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*(?:[,/]\s*([\d.]+))?/i);
+            for (let node: HTMLElement | null = body; node && node.nodeType === 1 && alpha < 0.995; node = node.parentElement) {
+                const c: any = getComputedStyle(node).backgroundColor.match(/rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*(?:[,/]\s*([\d.]+))?/i);
                 if (!c) continue;
                 const a = c[4] === undefined ? 1 : Number(c[4]);
                 if (!(a > 0)) continue;
@@ -2165,11 +2264,10 @@ export class WaveformBar {
      * Deliberately not `prefers-color-scheme` — see the core player's
      * `detectCanvasScheme` for why that signal is engine-specific and unusable
      * here.
-     * @private
-     * @returns {number}
+     * @internal
      */
-    _detectCanvasBrightness() {
-        const text = getComputedStyle(document.body).color.match(/rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)/i);
+    _detectCanvasBrightness(): number {
+        const text: any = getComputedStyle(document.body).color.match(/rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)/i);
         if (text) return (text[1] * 299 + text[2] * 587 + text[3] * 114) / 1000 > 128 ? 0 : 255;
         if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 0;
         if (window.matchMedia?.('(prefers-color-scheme: light)').matches) return 255;
@@ -2181,7 +2279,7 @@ export class WaveformBar {
      * and the queue panel) to match, so the bar adapts to a runtime light/dark
      * switch — not just the theme present when it was first shown. No-op when
      * `config.theme` is set explicitly.
-     * @private
+     * @internal
      */
     _refreshTheme() {
         if (this.config && this.config.theme) return;
@@ -2198,7 +2296,7 @@ export class WaveformBar {
      * `<html>`/`<body>` (Tailwind `dark`, `data-theme`, `data-color-scheme`) or
      * an OS `prefers-color-scheme` change — and re-detect. Event-driven
      * (MutationObserver + matchMedia), never a timer. Torn down in destroy().
-     * @private
+     * @internal
      */
     _watchTheme() {
         if (typeof document === 'undefined') return;
@@ -2214,6 +2312,7 @@ export class WaveformBar {
         } catch (e) { /* no matchMedia */ }
     }
 
+    /** @internal */
     _updateFavoriteUI() {
         if (!this.favBtnEl) return;
         const fav = this.isFavorited();
@@ -2223,6 +2322,7 @@ export class WaveformBar {
         this.favBtnEl.title = fav ? 'Favorited' : 'Favorite';
     }
 
+    /** @internal */
     _renderQueue() {
         renderQueue(this.queueBodyEl, this.queueCountEl, this.queue, this.currentIndex, {
             onSkipTo: (i) => this.skipTo(i),
@@ -2242,26 +2342,28 @@ export class WaveformBar {
      * - .wb-playing — track is actively playing
      * - .wb-favorited — track is in favorites
      * - .wb-in-cart — track has been added to cart
-     * @private
+     * @internal
      */
     _syncPageState() {
         const current = this.getCurrentTrack();
         const currentUrl = current ? current.url : null;
 
-        document.querySelectorAll('[data-wb-play]').forEach(el => {
+        document.querySelectorAll<HTMLElement>('[data-wb-play]').forEach(el => {
             const url = el.dataset.wbUrl || el.dataset.url;
             const id = el.dataset.wbId || el.dataset.id || url;
-            const isCurrent = url && url === currentUrl;
+            // Typed boolean, but '' or undefined when the trigger has no url.
+            // classList.toggle() takes '' as false and undefined as "no force".
+            const isCurrent = (url && url === currentUrl) as boolean;
 
             // Play state
             el.classList.toggle('wb-current', isCurrent);
             el.classList.toggle('wb-playing', isCurrent && this.isPlaying);
 
             // Favorite state
-            el.classList.toggle('wb-favorited', this._favorites.has(id));
+            el.classList.toggle('wb-favorited', this._favorites.has(id as string));
 
             // Cart state
-            el.classList.toggle('wb-in-cart', this._cartItems.has(id));
+            el.classList.toggle('wb-in-cart', this._cartItems.has(id as string));
         });
     }
 
@@ -2269,13 +2371,13 @@ export class WaveformBar {
      * Seed favorites and cart state from data attributes on page elements.
      * This is the authoritative source — server renders the initial state,
      * and we read it on init. Overrides localStorage.
-     * @private
+     * @internal
      */
     _seedFromAttributes() {
         let seededFav = false;
         let seededCart = false;
 
-        document.querySelectorAll('[data-wb-play]').forEach(el => {
+        document.querySelectorAll<HTMLElement>('[data-wb-play]').forEach(el => {
             const id = el.dataset.wbId || el.dataset.id || el.dataset.wbUrl || el.dataset.url;
             if (!id) return;
 
@@ -2300,12 +2402,12 @@ export class WaveformBar {
 
     /**
      * Sync favorite state back to trigger element data attributes
-     * @private
-     * @param {string} url - Track URL to match
-     * @param {boolean} favorited - New state
+     * @internal
+     * @param url - Track URL to match
+     * @param favorited - New state
      */
-    _syncFavoriteAttributes(url, favorited) {
-        document.querySelectorAll('[data-wb-play]').forEach(el => {
+    _syncFavoriteAttributes(url: string, favorited: boolean) {
+        document.querySelectorAll<HTMLElement>('[data-wb-play]').forEach(el => {
             const elUrl = el.dataset.wbUrl || el.dataset.url;
             if (elUrl === url) {
                 el.dataset.wbFavorited = favorited ? 'true' : 'false';
@@ -2316,12 +2418,12 @@ export class WaveformBar {
 
     /**
      * Sync cart state back to trigger element data attributes
-     * @private
-     * @param {string} url - Track URL to match
-     * @param {boolean} inCart - New state
+     * @internal
+     * @param url - Track URL to match
+     * @param inCart - New state
      */
-    _syncCartAttributes(url, inCart) {
-        document.querySelectorAll('[data-wb-play]').forEach(el => {
+    _syncCartAttributes(url: string, inCart: boolean) {
+        document.querySelectorAll<HTMLElement>('[data-wb-play]').forEach(el => {
             const elUrl = el.dataset.wbUrl || el.dataset.url;
             if (elUrl === url) {
                 el.dataset.wbInCart = inCart ? 'true' : 'false';
@@ -2334,6 +2436,7 @@ export class WaveformBar {
     // Persistence
     // =====================================================================
 
+    /** @internal */
     _saveState() {
         if (!this.config.persist) return;
         saveQueueState(this.config.storageKey, {
@@ -2344,6 +2447,7 @@ export class WaveformBar {
         });
     }
 
+    /** @internal */
     _restoreState() {
         if (!this.config.persist) return;
         const state = restoreQueueState(this.config.storageKey);
@@ -2364,7 +2468,7 @@ export class WaveformBar {
         // v1.8.0+) instead of poking player.options.* + load(). This avoids
         // loadTrack's forced auto-play while still routing through the
         // supported API — we handle seek and resume manually below.
-        const loadOpts = {autoplay: false};
+        const loadOpts: Record<string, any> = {autoplay: false};
         if (track.waveform) loadOpts.waveform = track.waveform;
 
         // Pass markers to the player and set up DJ mode
@@ -2390,13 +2494,13 @@ export class WaveformBar {
             this._restoreSeekTimeout = null;
         }
 
-        this.player.loadTrack(track.url, track.title, track.artist, loadOpts).then(() => {
+        this.player!.loadTrack(track.url, track.title, track.artist, loadOpts).then(() => {
             if (this._loadSeq !== seq) return;
             if (this.player) this.player.setVolume(this.isMuted ? 0 : this.volume);
 
             if (state.isPlaying && this.config.autoResume) {
                 try {
-                    const p = this.player.play();
+                    const p = this.player!.play();
                     if (p && typeof p.catch === 'function') {
                         p.catch(() => {
                             this.isPlaying = false;
@@ -2433,13 +2537,14 @@ export class WaveformBar {
     /**
      * Save volume + mute state — only when persistence is on. `persist: false`
      * is documented as "nothing is stored", localStorage included.
-     * @private
+     * @internal
      */
     _persistVolume() {
         if (!this.config.persist) return;
         saveVolume(this.config.storageKey, this.volume, this.isMuted, this._volumeBeforeMute);
     }
 
+    /** @internal */
     _restoreVolume() {
         const data = restoreVolume(this.config.storageKey);
         if (!data) return;
@@ -2453,6 +2558,7 @@ export class WaveformBar {
         this._updateVolumeUI();
     }
 
+    /** @internal */
     _restoreFavorites() {
         this._favorites = restoreFavorites(this.config.storageKey);
     }

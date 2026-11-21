@@ -12,7 +12,6 @@ import type {WaveformBarResolvedConfig} from './types.js';
  * the left zone. Class names are identical across layouts so the JS wiring
  * (which selects purely by class) never changes.
  * @param config
- * @returns 
  */
 function buildControls(config: WaveformBarResolvedConfig): string {
     let s = '<div class="wb-controls">';
@@ -53,7 +52,6 @@ function buildMeta(config: WaveformBarResolvedConfig): string {
  * Secondary controls — actions (fav/cart) + volume + share + queue button.
  * Returned WITHOUT the `.wb-right` wrapper so each layout can place them.
  * @param config
- * @returns 
  */
 function buildRightControls(config: WaveformBarResolvedConfig): string {
     let s = '';
@@ -117,7 +115,6 @@ function buildCollapse(config: WaveformBarResolvedConfig): string {
  * event binding work identically for either.
  *
  * @param config
- * @returns 
  */
 export function buildBarHTML(config: WaveformBarResolvedConfig): string {
     const controls = buildControls(config);
