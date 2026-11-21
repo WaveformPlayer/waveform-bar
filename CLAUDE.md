@@ -12,11 +12,11 @@ self-mode `WaveformPlayer`, and drives inline `external`-mode players on the pag
 
 ## The rule that matters: config is an allowlist, not a spread
 
-Adding a config key takes **two** edits in `src/js/core.js`, and skipping the second
+Adding a config key takes **two** edits in `src/js/core.ts` (plus its type in `src/js/types.ts`), and skipping the second
 fails **silently** — no error, the option just never reaches the player:
 
-1. Add the key to the `DEFAULTS` object (~line 23).
-2. Add a forward line in `_initPlayer()`, next to the colour forwards (~line 648):
+1. Add the key to the `DEFAULTS` object.
+2. Add a forward line in `_initPlayer()`, next to the colour forwards:
    ```js
    if (this.config.<key>) opts.<key> = this.config.<key>;
    ```
@@ -24,16 +24,18 @@ fails **silently** — no error, the option just never reaches the player:
 There is no spread of `this.config` into `opts` anywhere — if it isn't on that list,
 it doesn't propagate. Grep `opts\.\w* = this\.config` to see the full current set.
 
-## Architecture (`src/js/`)
-- `core.js` — the singleton, `DEFAULTS`, `_initPlayer()`, lifecycle.
-- `actions.js` — `data-wb-*` trigger wiring. `queue.js` — track queue.
-- `dom.js` — bar markup. `icons.js` — inline SVG. `storage.js` — persistence.
-- `utils.js`, `index.js` — entry + `window.WaveformBar`.
+## Architecture (`src/js/`, TypeScript since 2.0)
+- `core.ts` — the singleton, `DEFAULTS`, `_initPlayer()`, lifecycle.
+- `types.ts` — the public types (`WaveformBarConfig`, tracks, events).
+- `actions.ts` — `data-wb-*` trigger wiring. `queue.ts` — track queue.
+- `dom.ts` — bar markup. `icons.ts` — inline SVG. `storage.ts` — persistence.
+- `utils.ts`, `index.ts` — entry + `window.WaveformBar`.
 
 ## Conventions
-- **Ships no `index.d.ts`.** The four `waveform-bar-*` wrappers hand-declare
-  `WaveformBarConfig` in their own `src/types.ts`. Nothing links those types to
-  `DEFAULTS` at build time — but each wrapper's `test/config-drift.test.ts` reads this
+- **Types are generated (2.0).** `npm run build:types` writes `types/` from the source;
+  never hand-edit it. The framework wrappers still hand-declare `WaveformBarConfig`
+  in their own `src/types.ts`. Nothing links those types to `DEFAULTS` at build
+  time — but each wrapper's `test/config-drift.test.ts` reads this
   repo's `DEFAULTS` from the installed package and fails when a key isn't typed (or
   explicitly excluded). A new config key still means editing all four types; after a
   release, bump the wrappers' devDependency so their drift test sees it.

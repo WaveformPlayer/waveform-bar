@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] — Unreleased
+
+### Fixed
+
+- **The queue panel is a full-width sheet on phones again.** Opening the queue
+  set the panel's position as an inline `right`, which beat the narrow-screen
+  rule that makes it edge to edge, so on a 360px screen it stopped 16px short.
+  The position now goes through a `--wb-queue-right` custom property.
+- **The volume popup lines up with its button between 481px and 768px.** The
+  open state's centring transform outranked the narrow-screen rule that removes
+  it, leaving the popup 20px to the left.
+
+### Changed
+
+- **Written in TypeScript**, with generated type declarations (`types/`).
+- **CSS tidied for the 2.0 browser floor** (Chrome/Edge 111, Firefox 114,
+  Safari 16.4): the `-webkit-appearance` prefix is gone and repeated rules are
+  merged. Rendering is unchanged.
+
 ## [1.12.2] — 2026-10-21
 
 ### Fixed

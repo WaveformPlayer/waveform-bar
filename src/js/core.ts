@@ -1517,7 +1517,9 @@ export class WaveformBar {
         // Position above the queue button
         if (this.queueBtnEl) {
             const rect = this.queueBtnEl.getBoundingClientRect();
-            this.queueEl.style.right = (window.innerWidth - rect.right) + 'px';
+            // A custom property, not an inline `right`: an inline style would
+            // beat the narrow-screen rule that makes the panel a full-width sheet.
+            this.queueEl.style.setProperty('--wb-queue-right', (window.innerWidth - rect.right) + 'px');
         }
 
         this.queueEl.classList.add('wb-queue-open');

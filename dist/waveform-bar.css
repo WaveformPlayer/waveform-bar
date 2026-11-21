@@ -737,6 +737,8 @@
 
 .wb-queue-panel {
     bottom: 68px;
+    /* Set from the queue button's position when the panel opens. */
+    right: var(--wb-queue-right, auto);
     width: 340px;
     max-height: 400px;
     border: 1px solid var(--wb-border);
@@ -1199,7 +1201,9 @@
     .wb-queue-item-title { font-size: 0.85rem; }
     .wb-queue-item-artist { font-size: 0.75rem; }
 
-    .wb-volume-popup {
+    /* Both selectors: the open state's own transform would otherwise win. */
+    .wb-volume-popup,
+    .wb-volume-popup.wb-volume-open {
         left: auto;
         right: 0;
         transform: none;

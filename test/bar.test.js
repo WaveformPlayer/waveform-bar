@@ -596,6 +596,16 @@ describe('queue panel accessibility', () => {
 		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 		expect(bar.queueOpen).toBe(false);
 	});
+
+	it('positions the panel through --wb-queue-right, never an inline right', () => {
+		// An inline `right` beats the narrow-screen rule that makes the panel a
+		// full-width sheet (2.0 fix); the custom property leaves the CSS in charge.
+		const bar = makeBar({ persist: false, showQueue: true });
+		bar.openQueuePanel();
+		const panel = document.querySelector('.wb-queue-panel');
+		expect(panel.style.right).toBe('');
+		expect(panel.style.getPropertyValue('--wb-queue-right')).toMatch(/^-?\d+(\.\d+)?px$/);
+	});
 });
 
 describe('persistence hardening', () => {
