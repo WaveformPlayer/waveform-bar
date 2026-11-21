@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeHref, parseTrackFromElement, formatTime, normalizeTrack, mergeTrack } from '../src/js/utils.js';
+import WaveformPlayer from '@arraypress/waveform-player/no-autoinit';
+import { parseTrackFromElement, formatTime, normalizeTrack, mergeTrack } from '../src/js/utils.js';
+
+// 2.0: the bar's own isSafeHref copy is gone; the track-link and share-link
+// guards call the core's `WaveformPlayer.utils.isSafeHref`, which every 2.0
+// core has. The contract the bar relies on is still pinned here.
+const { isSafeHref } = WaveformPlayer.utils;
 
 describe('formatTime', () => {
 	it('formats M:SS, staying in minutes past an hour', () => {

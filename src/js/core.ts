@@ -9,7 +9,6 @@ import {
     escapeHtml,
     formatTime,
     parseTrackFromElement,
-    isSafeHref,
     normalizeTrack,
     mergeTrack
 } from './utils.js';
@@ -103,7 +102,7 @@ const DEFAULTS = {
     waveformHeight: 32,
     barWidth: 2,
     barSpacing: 2,        // 2px gap between 2px bars — crisp, separated bars (0 = solid "blob")
-    barRadius: null,      // rounded bar caps in px (0 = square). null = player default (waveform-player 1.8.0+)
+    barRadius: null,      // rounded bar caps in px (0 = square). null = player default
     waveformColor: null,
     progressColor: null,
     waveformGradient: 'vertical',
@@ -297,6 +296,11 @@ export class WaveformBar {
         this.config.layout = mode === 'classic' ? 'center' : 'default';
         this.config.waveform = mode !== 'classic';
 
+        if (typeof window.WaveformPlayer === 'undefined') {
+            console.error('[WaveformBar] WaveformPlayer is required.');
+            return this;
+        }
+
         // Shareable timestamp: parse the share link's `?<shareParam>=<seconds>`
         // (time) plus the track identity (`?wid` = id, `?wu` = url fallback,
         // `?wtitle`/`?wartist` for display). When the link names a track we
@@ -306,11 +310,6 @@ export class WaveformBar {
         this._shareSeek = (this._shareTarget && !this._shareTarget.id && !this._shareTarget.url)
             ? this._shareTarget.time
             : null;
-
-        if (typeof window.WaveformPlayer === 'undefined') {
-            console.error('[WaveformBar] WaveformPlayer is required.');
-            return this;
-        }
 
         this._createBar();
         this._createQueue();
@@ -629,7 +628,7 @@ export class WaveformBar {
                 const t = this.getCurrentTrack();
                 // Guard the scheme — a `data-wb-link="javascript:…"` value
                 // would otherwise execute on navigation (open-redirect / XSS).
-                if (t && t.link && isSafeHref(t.link)) window.location.href = t.link;
+                if (t && t.link && window.WaveformPlayer.utils.isSafeHref(t.link)) window.location.href = t.link;
             });
         }
     }
@@ -974,7 +973,7 @@ export class WaveformBar {
         const previous = this._externalPlayers || new Map();
         this._externalPlayers = new Map();
         const WP = window.WaveformPlayer;
-        if (!WP || !WP.instances) return;
+        if (!WP) return;
 
         // Match instances by container, not by `el.id`: a player whose element
         // has no id registers under a generated `wp_…` key that is never
@@ -1008,10 +1007,8 @@ export class WaveformBar {
             const currentUrl = current ? current.url : null;
             newlyDiscovered.forEach(({inst, url}) => {
                 const isCurrent = url === currentUrl;
-                if (typeof inst.setPlayingState === 'function') {
-                    inst.setPlayingState(isCurrent && this.isPlaying);
-                }
-                if (isCurrent && typeof inst.setProgress === 'function' && this.player && this.player.audio) {
+                inst.setPlayingState(isCurrent && this.isPlaying);
+                if (isCurrent && this.player && this.player.audio) {
                     inst.setProgress(this.player.audio.currentTime || 0, this.player.audio.duration || 0);
                 }
             });
@@ -1055,9 +1052,7 @@ export class WaveformBar {
         this._externalPlayers.forEach((set, url) => {
             const isCurrent = url === currentUrl;
             set.forEach((player) => {
-                if (typeof player.setPlayingState === 'function') {
-                    player.setPlayingState(isCurrent && playing);
-                }
+                player.setPlayingState(isCurrent && playing);
             });
         });
     }
@@ -1077,16 +1072,11 @@ export class WaveformBar {
         if (!current) return;
         const set = this._externalPlayers.get(current.url);
         if (!set) return;
-        set.forEach((player) => {
-            if (typeof player.setProgress === 'function') {
-                player.setProgress(currentTime, duration);
-            }
-        });
+        set.forEach((player) => player.setProgress(currentTime, duration));
     }
 
     /** @internal */
     _observeDOM() {
-        if (typeof MutationObserver === 'undefined') return;
         // Triggers are handled by the single delegated listener, so the
         // observer only needs to (re)discover late-mounted external-mode
         // players and re-sync page state.
@@ -1597,7 +1587,7 @@ export class WaveformBar {
         }
         // Only honour an embedded url that's a safe http(s)/relative target —
         // the value is attacker-controllable, so never let it be javascript:.
-        const url = (rawUrl && isSafeHref(rawUrl)) ? rawUrl : null;
+        const url = (rawUrl && window.WaveformPlayer.utils.isSafeHref(rawUrl)) ? rawUrl : null;
 
         return {time, id: id || null, url, title: q.get('wtitle'), artist: q.get('wartist')};
     }
@@ -1886,8 +1876,7 @@ export class WaveformBar {
         }
         // A failed load surfaces through onError; don't also leak the
         // rejected promise as an unhandled rejection.
-        const loading = this.player.loadTrack(track.url, track.title, track.artist, loadOpts);
-        if (loading && typeof loading.catch === 'function') loading.catch(() => {});
+        this.player.loadTrack(track.url, track.title, track.artist, loadOpts).catch(() => {});
 
         // Store markers for DJ mode (dynamic title/artist updates)
         this._activeMarkers = track.markers && track.markers.length ? track.markers : null;
@@ -2183,14 +2172,10 @@ export class WaveformBar {
     }
 
     /**
-     * Auto-detect light/dark theme from the page.
-     *
-     * Delegates to the core player's shared detector when it's available, so
-     * the bar and the inline players can never disagree about the page theme —
-     * they used to carry separate copies of this heuristic and drifted. The
-     * local fallback below only runs against player builds older than 1.24.1,
-     * which don't expose `utils.detectColorScheme`; it can go once the peer
-     * range moves past that.
+     * Auto-detect light/dark theme from the page, with the core player's
+     * shared detector, so the bar and the inline players can never disagree
+     * about the page theme (they used to carry separate copies of the
+     * heuristic, and drifted).
      *
      * @internal
      */
@@ -2199,81 +2184,7 @@ export class WaveformBar {
         // own `--wb-bg`, so starting the backdrop walk there would just read
         // back the theme it already has. The bar is position:fixed over the
         // page anyway, so what's behind it IS the page canvas.
-        const shared = typeof window !== 'undefined' && window.WaveformPlayer?.utils?.detectColorScheme;
-        if (typeof shared === 'function') {
-            try {
-                return shared(document.body);
-            } catch (e) { /* fall through to the local copy */ }
-        }
-        return this._detectThemeFallback();
-    }
-
-    /**
-     * Theme detection for older `@arraypress/waveform-player` builds.
-     * Mirrors that package's `detectColorScheme` — keep the two in step.
-     * @internal
-     */
-    _detectThemeFallback(): 'dark' | 'light' {
-        const root = document.documentElement;
-        const body = document.body;
-
-        // 1. Explicit theme classes/attributes
-        const darkIndicators = ['dark', 'dark-mode', 'theme-dark'];
-        const lightIndicators = ['light', 'light-mode', 'theme-light'];
-
-        for (const cls of darkIndicators) {
-            if (root.classList.contains(cls) || body.classList.contains(cls)) return 'dark';
-        }
-        if (root.getAttribute('data-theme') === 'dark' || body.getAttribute('data-theme') === 'dark') return 'dark';
-
-        for (const cls of lightIndicators) {
-            if (root.classList.contains(cls) || body.classList.contains(cls)) return 'light';
-        }
-        if (root.getAttribute('data-theme') === 'light' || body.getAttribute('data-theme') === 'light') return 'light';
-
-        // 2. The backdrop actually visible behind the bar: <body> and <html>,
-        //    alpha-composited over the UA canvas. Reading <body>'s background
-        //    as a colour on its own was the bug — it computes to
-        //    `rgba(0, 0, 0, 0)` on any page that doesn't paint it, which scored
-        //    as pure black and pinned the bar to dark on white pages.
-        try {
-            let sum = 0;
-            let alpha = 0;
-
-            for (let node: HTMLElement | null = body; node && node.nodeType === 1 && alpha < 0.995; node = node.parentElement) {
-                const c: any = getComputedStyle(node).backgroundColor.match(/rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*(?:[,/]\s*([\d.]+))?/i);
-                if (!c) continue;
-                const a = c[4] === undefined ? 1 : Number(c[4]);
-                if (!(a > 0)) continue;
-
-                const weight = a * (1 - alpha);
-                sum += ((c[1] * 299 + c[2] * 587 + c[3] * 114) / 1000) * weight;
-                alpha += weight;
-            }
-
-            const brightness = sum + this._detectCanvasBrightness() * (1 - alpha);
-            if (brightness > 128) return 'light';
-            if (brightness < 128) return 'dark';
-        } catch (e) {
-        }
-
-        return 'dark';
-    }
-
-    /**
-     * Brightness (0–255) of the canvas behind the page, read from the resolved
-     * text colour: light text means the document's used colour-scheme is dark.
-     * Deliberately not `prefers-color-scheme` — see the core player's
-     * `detectCanvasScheme` for why that signal is engine-specific and unusable
-     * here.
-     * @internal
-     */
-    _detectCanvasBrightness(): number {
-        const text: any = getComputedStyle(document.body).color.match(/rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)/i);
-        if (text) return (text[1] * 299 + text[2] * 587 + text[3] * 114) / 1000 > 128 ? 0 : 255;
-        if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 0;
-        if (window.matchMedia?.('(prefers-color-scheme: light)').matches) return 255;
-        return 0;
+        return window.WaveformPlayer.utils.detectColorScheme(document.body);
     }
 
     /**
@@ -2466,8 +2377,7 @@ export class WaveformBar {
         this._updateFavoriteUI();
         this._updateNavButtons();
 
-        // Use the public loadTrack() API with { autoplay: false } (core
-        // v1.8.0+) instead of poking player.options.* + load(). This avoids
+        // Use the public loadTrack() API with { autoplay: false } instead of poking player.options.* + load(). This avoids
         // loadTrack's forced auto-play while still routing through the
         // supported API — we handle seek and resume manually below.
         const loadOpts: Record<string, any> = {autoplay: false};

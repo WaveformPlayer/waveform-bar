@@ -28,29 +28,6 @@ export function escapeHtml(str: unknown): string {
 }
 
 /**
- * Whether a URL is safe to navigate to (assign to `location.href`).
- * Allows only `http`/`https` and relative URLs, rejecting `javascript:`,
- * `data:`, `blob:`, `vbscript:` and other script-bearing schemes.
- *
- * TODO(harden): adopt `WaveformPlayer.utils.isSafeHref` once the peer dep
- * is bumped to ^1.8.0 (which ships this helper). Inlined here so the
- * open-redirect / XSS guard is fixed without a peer bump.
- *
- * @param url
- */
-export function isSafeHref(url: unknown): boolean {
-    if (typeof url !== 'string' || url === '') return false;
-    try {
-        // Resolve relative URLs against the current document; only the
-        // scheme matters for the safety decision.
-        const u = new URL(url, location.href);
-        return u.protocol === 'http:' || u.protocol === 'https:';
-    } catch (e) {
-        return false;
-    }
-}
-
-/**
  * Format seconds to M:SS.
  *
  * Falsy, non-numeric, non-finite and negative inputs all render as `'0:00'`.

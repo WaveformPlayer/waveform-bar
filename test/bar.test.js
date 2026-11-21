@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import RealPlayer from '@arraypress/waveform-player/no-autoinit';
 import { WaveformBar } from '../src/js/core.js';
 
 /**
  * Minimal stand-in for the external @arraypress/waveform-player peer. The bar
- * only needs a constructable object with the handful of methods it calls plus
- * a static `instances` Map for external-player discovery. We capture the last
+ * only needs a constructable object with the handful of methods it calls, a
+ * static `instances` Map for external-player discovery, and the static `utils`
+ * (theme detection, URL safety) — the real core's, since every 2.0 core has
+ * them and the bar no longer carries its own copies. We capture the last
  * instance so tests can invoke the option callbacks (e.g. onError) the bar
  * wired up.
  */
@@ -27,6 +30,7 @@ class MockPlayer {
 	seekToPercent() {}
 	destroy() {}
 }
+MockPlayer.utils = RealPlayer.utils;
 
 let bars = [];
 function makeBar(config = { persist: false }) {
@@ -58,8 +62,9 @@ afterEach(() => {
  * its own copy of the player's heuristic and so its own copy of the bug: it read
  * `<body>`'s computed background, got `rgba(0, 0, 0, 0)` on any page that never
  * paints one, scored that as pure black and pinned the bar to dark on white
- * pages. MockPlayer exposes no `utils`, so these exercise the local fallback
- * unless a test installs the shared detector.
+ * pages. Since 2.0 the bar has no copy: it asks the core's
+ * `utils.detectColorScheme` (MockPlayer carries the real one), so these pin
+ * that the bar asks it about the page, not about itself.
  */
 describe('theme detection', () => {
 	afterEach(() => {
@@ -111,7 +116,7 @@ describe('theme detection', () => {
 
 	it('delegates to the core player\'s shared detector when it is available', () => {
 		const spy = vi.fn(() => 'dark');
-		window.WaveformPlayer.utils = { detectColorScheme: spy };
+		window.WaveformPlayer.utils = { ...RealPlayer.utils, detectColorScheme: spy };
 
 		try {
 			expect(makeBar()._detectTheme()).toBe('dark');
@@ -119,21 +124,12 @@ describe('theme detection', () => {
 			// Never the bar element — that would be circular.
 			expect(spy.mock.calls[0][0]).toBe(document.body);
 		} finally {
-			delete window.WaveformPlayer.utils;
+			window.WaveformPlayer.utils = RealPlayer.utils;
 		}
 	});
-
-	it('falls back to its own detection if the shared detector throws', () => {
-		window.WaveformPlayer.utils = {
-			detectColorScheme: () => { throw new Error('boom'); },
-		};
-
-		try {
-			expect(makeBar()._detectTheme()).toBe('light');
-		} finally {
-			delete window.WaveformPlayer.utils;
-		}
-	});
+	// 2.0: the "falls back to its own detection if the shared detector throws"
+	// test went with the fallback. Every 2.0 core has detectColorScheme, and it
+	// catches its own errors (themes.ts) and answers 'dark' or 'light'.
 });
 
 describe('delegated trigger binding', () => {
@@ -193,7 +189,9 @@ describe('destroy() listener teardown', () => {
 
 	it('clears the external players map', () => {
 		const bar = makeBar();
-		bar._externalPlayers.set('x.mp3', new Set([{}]));
+		// A stand-in with the external-mode API every 2.0 core has (the bar no
+		// longer feature-checks setPlayingState/setProgress before calling them).
+		bar._externalPlayers.set('x.mp3', new Set([{ setPlayingState() {}, setProgress() {} }]));
 		bar.destroy();
 		expect(bar._externalPlayers.size).toBe(0);
 	});

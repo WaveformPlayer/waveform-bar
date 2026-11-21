@@ -1,5 +1,5 @@
 /**
- * WaveformBar v1.0.0
+ * WaveformBar
  * Persistent bottom audio player bar for WaveformPlayer
  *
  * @author ArrayPress
