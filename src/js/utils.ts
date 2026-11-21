@@ -92,7 +92,7 @@ export function sanitizeMarkers(value: unknown): WaveformBarMarker[] {
  * `player` is the whole instance, which must never reach the queue (it's
  * persisted to sessionStorage).
  */
-const PLAYER_DETAIL_FIELDS = ['url', 'title', 'artist', 'artwork', 'markers', 'waveform'];
+const PLAYER_DETAIL_FIELDS = ['url', 'title', 'artist', 'artwork', 'markers', 'waveform', 'duration'];
 
 /**
  * Shape any incoming track object into a queue entry. Every path that puts a

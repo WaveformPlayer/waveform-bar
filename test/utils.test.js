@@ -159,6 +159,11 @@ describe('normalizeTrack / mergeTrack', () => {
 		expect(t).toEqual({ url: 'a.mp3', title: 'A' });
 	});
 
+	it('takes the known duration from a 2.0 player detail (null is skipped)', () => {
+		expect(normalizeTrack({ url: 'a.mp3', duration: 187, player: {} }, { fromPlayer: true })).toEqual({ url: 'a.mp3', duration: 187 });
+		expect(normalizeTrack({ url: 'a.mp3', duration: null, player: {} }, { fromPlayer: true })).toEqual({ url: 'a.mp3' });
+	});
+
 	it('rejects input with no usable url', () => {
 		expect(normalizeTrack(null)).toBe(null);
 		expect(normalizeTrack('a.mp3')).toBe(null);

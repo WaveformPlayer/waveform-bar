@@ -20,6 +20,8 @@ Requires `@arraypress/waveform-player` 2.0.
   `data-duration` serves both, so a page with `preload: 'none'` players shows
   every length with no audio traffic. A track without a usable duration
   passes none, so the previous track's never carries over.
+  An inline player that isn't a trigger also passes its `duration`: the bar
+  reads it from the player's request-play detail.
 - **Compact `wp1:` peaks on triggers.** `data-wb-waveform` / `data-waveform`
   may be a `wp1:` string (the 2.0 core's compact peaks); it is passed to the
   player to decode. Before, anything that wasn't a JSON array was dropped and

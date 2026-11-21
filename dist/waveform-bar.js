@@ -61,7 +61,7 @@
     if (!Array.isArray(value)) return [];
     return value.map((m) => m && typeof m === "object" && !Array.isArray(m) ? { ...m, time: Number(m.time) } : null).filter((m) => m && Number.isFinite(m.time));
   }
-  var PLAYER_DETAIL_FIELDS = ["url", "title", "artist", "artwork", "markers", "waveform"];
+  var PLAYER_DETAIL_FIELDS = ["url", "title", "artist", "artwork", "markers", "waveform", "duration"];
   function normalizeTrack(input, { fromPlayer = false } = {}) {
     if (!input || typeof input !== "object" || typeof input.url !== "string" || !input.url) return null;
     const keys = fromPlayer ? PLAYER_DETAIL_FIELDS : Object.keys(input);
