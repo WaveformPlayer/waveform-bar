@@ -83,3 +83,33 @@ describe('hidden surfaces are unfocusable', () => {
 		expect(rules('.wb-volume-popup.wb-volume-open')).toMatch(/visibility:\s*visible/);
 	});
 });
+
+/**
+ * The 2.0 floor is Chrome/Edge 111, Firefox 114, Safari 16.4. Two prefixes are
+ * still load-bearing there (MDN browser-compat-data): backdrop-filter is
+ * unprefixed only from Safari 18, and mask-* only from Chrome/Edge 120. A
+ * "drop the old prefixes" pass would blank the bar's glass in Safari 16-17 and
+ * every page icon in Chrome 111-119, with nothing failing in a current browser.
+ */
+describe('prefixes the 2.0 browser floor still needs', () => {
+	const ICON_CSS = readFileSync(resolve(process.cwd(), 'src/css/waveform-bar-icons.css'), 'utf8');
+	const blocks = (css) => [...css.matchAll(/\{([^}]*)\}/g)].map((m) => m[1]);
+
+	it('pairs every backdrop-filter with -webkit-backdrop-filter (Safari < 18)', () => {
+		const withFilter = blocks(CSS).filter((b) => /(^|[\s;])backdrop-filter:/.test(b));
+		expect(withFilter.length).toBeGreaterThan(0);
+		for (const b of withFilter) {
+			const value = b.match(/(?:^|[\s;])backdrop-filter:\s*([^;]+);/)[1];
+			expect(b).toContain(`-webkit-backdrop-filter: ${value};`);
+		}
+	});
+
+	it('pairs every icon mask property with its -webkit- form (Chrome/Edge < 120)', () => {
+		for (const b of blocks(ICON_CSS)) {
+			for (const [, prop, value] of b.matchAll(/(?:^|[\s;])(mask-[a-z]+):\s*([^;]+);/g)) {
+				expect(b).toContain(`-webkit-${prop}: ${value};`);
+			}
+		}
+		expect(ICON_CSS).toMatch(/-webkit-mask-image:/);
+	});
+});

@@ -638,7 +638,6 @@
    leaving an ungrabbable dot. width = the volume travel; height = thickness.
    rotate(-90deg) puts max (loud) at the top, 0 (mute) at the bottom. */
 .wb-volume-popup .wb-volume-slider {
-    -webkit-appearance: none;
     appearance: none;
     width: 104px;
     height: 6px;
@@ -660,9 +659,12 @@
     border-radius: 3px;
 }
 
-/* Thumb — Webkit (margin-top centers the 16px thumb on the 6px track) */
+/* Thumb — Webkit (margin-top centers the 16px thumb on the 6px track).
+   The -webkit-/-moz- pseudo-elements stay: there is no standard thumb or track
+   selector, and they live in separate rules because one unknown pseudo-element
+   would drop a grouped rule entirely. */
 .wb-volume-popup .wb-volume-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
+    appearance: none;
     width: 16px;
     height: 16px;
     margin-top: -5px;
