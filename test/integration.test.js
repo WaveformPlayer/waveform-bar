@@ -37,7 +37,7 @@ function audioStarted(bar) {
 	bar.player.audio.dispatchEvent(new Event('play'));
 }
 
-// The documented trigger + inline surface (waveform-docs bar/triggers.mdx):
+// The documented trigger + inline surface (docs repo: bar/triggers.mdx):
 // no `id` attribute — the player registers under a generated `wp_…` id.
 const DOC_EXAMPLE = `<div data-waveform-player
 	data-audio-mode="external"
