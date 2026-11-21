@@ -27,6 +27,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p .",
+    "lint": "biome lint",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -62,6 +63,7 @@
   },
   "devDependencies": {
     "@arraypress/waveform-player": "^1.30.2",
+    "@biomejs/biome": "^2.6.8",
     "esbuild": "^0.28.2",
     "jsdom": "^31.0.1",
     "typescript": "^7.0.2",

@@ -1577,7 +1577,7 @@ export class WaveformBar {
      * @internal
      */
     _readShareTarget(): ShareTarget | null {
-        let q;
+        let q: URLSearchParams;
         try {
             q = new URLSearchParams(window.location.search);
         } catch (e) {
@@ -1727,7 +1727,7 @@ export class WaveformBar {
         const track = this.getCurrentTrack();
         const cur = this.player && this.player.audio ? this.player.audio.currentTime : 0;
         const seconds = Math.max(0, Math.floor(cur || 0));
-        let link;
+        let link: string;
         try {
             const url = new URL(window.location.href);
             const p = url.searchParams;
