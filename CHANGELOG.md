@@ -6,6 +6,55 @@ All notable changes to this project will be documented in this file.
 
 ## [2.0.0] — Unreleased
 
+Requires `@arraypress/waveform-player` 2.0.
+
+### Added
+
+- **A track's `duration` reaches the player.** `data-wb-duration` /
+  `data-duration` on a trigger (or `duration` on a track object) is passed to
+  the player as its 2.0 `duration` option when it reads as a length: seconds
+  (`187`) or a clock string (`3:07`, `1:02:03`, the form 1.x documented for
+  display). The bar's total time shows it as soon as the track loads, and the
+  player uses it until the audio's own metadata arrives. On the documented
+  markup — one element that is both the inline player and the trigger — one
+  `data-duration` serves both, so a page with `preload: 'none'` players shows
+  every length with no audio traffic. A track without a usable duration
+  passes none, so the previous track's never carries over.
+- **Compact `wp1:` peaks on triggers.** `data-wb-waveform` / `data-waveform`
+  may be a `wp1:` string (the 2.0 core's compact peaks); it is passed to the
+  player to decode. Before, anything that wasn't a JSON array was dropped and
+  the player decoded the audio instead. Track objects already passed any
+  peaks string through.
+
+### Changed
+
+- **Peer dependency `@arraypress/waveform-player` `^2.0.0`** (was `^1.8.0`).
+- **Written in TypeScript**, with generated type declarations (`types/`),
+  now with declaration maps, so "Go to definition" opens the shipped source.
+- **Browser support is Chrome/Edge 111+, Firefox 114+ and Safari 16.4+** (all
+  from early 2023). The bundles are built from ES2022 source.
+- **CSS tidied for the 2.0 browser floor**: the `-webkit-appearance` prefix is
+  gone and repeated rules are merged. Rendering is unchanged.
+- **The script-tag builds run in strict mode.** `waveform-bar.js` and
+  `waveform-bar.min.js` now start with `"use strict"`. The ES module build
+  always ran strict, as every ES module does, so this is the same code under
+  the same rules it already ran with there.
+- **The package is ES modules only, with an `exports` map.** `"type":
+  "module"`; `main` is now the ES module build (it was the script-tag build,
+  which exports nothing to a bundler or `require()`), and `exports` lists `.`
+  (types and the ES module build), `./styles.css`, `./dist/*` (so every
+  documented `dist/` path, CDN-style or imported, still resolves) and
+  `./package.json`. `require('@arraypress/waveform-bar')` works on Node
+  22.12+, which loads ES modules through `require()`; `engines` says
+  `>=22.12`. A bare jsDelivr URL still serves the minified script-tag build
+  (the new `jsdelivr` field), as unpkg already did. Deep imports outside
+  `dist/` (such as `src/…`) no longer resolve.
+- **A duration given in seconds is shown as a clock** in the meta tags
+  (`187` shows as `3:07`). Any other string is still shown as given.
+- **Theme detection and link checks use the core's.** The bar calls
+  `WaveformPlayer.utils.detectColorScheme` and `utils.isSafeHref` instead of
+  carrying copies, so the bar and the inline players can't disagree.
+
 ### Fixed
 
 - **The queue panel is a full-width sheet on phones again.** Opening the queue
@@ -16,12 +65,12 @@ All notable changes to this project will be documented in this file.
   open state's centring transform outranked the narrow-screen rule that removes
   it, leaving the popup 20px to the left.
 
-### Changed
+### Removed
 
-- **Written in TypeScript**, with generated type declarations (`types/`).
-- **CSS tidied for the 2.0 browser floor** (Chrome/Edge 111, Firefox 114,
-  Safari 16.4): the `-webkit-appearance` prefix is gone and repeated rules are
-  merged. Rendering is unchanged.
+- **The `module` field.** `exports` covers every current bundler.
+- **The bar's copies of the core's theme detection and `isSafeHref`**, kept
+  only for cores older than 1.24.1, and its checks for `setPlayingState()` /
+  `setProgress()` on inline players, which every 2.0 core has.
 
 ## [1.12.2] — 2026-10-21
 

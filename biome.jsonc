@@ -10,10 +10,10 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
-      // 2.0 ships 1.12.2's exact code (the built bundles are compared with
-      // comments stripped). Every rule below is off because its fix would
-      // change emitted code, or because it contradicts something deliberate.
-      // Revisit them together after 2.0, each with its own tests.
+      // The TypeScript port kept 1.12.2's exact code (the built bundles were
+      // compared with comments stripped). Every rule below is off because its
+      // fix would change emitted code, or because it contradicts something
+      // deliberate. Revisit them together after 2.0, each with its own tests.
       "style": {
         "noNonNullAssertion": "off", // deliberate: each `!` marks where the code relies on setup having run
         "useTemplate": "off",

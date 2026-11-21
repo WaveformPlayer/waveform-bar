@@ -831,6 +831,12 @@ export class WaveformBar {
         if (this.config.crossOrigin) opts.crossOrigin = this.config.crossOrigin;
         // `!= null`, not truthiness: 0 (square caps) is a meaningful value.
         if (this.config.barRadius != null) opts.barRadius = this.config.barRadius;
+        // Deliberately NOT forwarded (2.0 core options): showLoop, showVolume,
+        // showDownload — the bar hides the player's info row, where those
+        // controls live, and has its own repeat and volume; loop — repeat 'one'
+        // does that, and a looping <audio> never fires `ended`, which drives
+        // the queue; lazy — the embedded player has nothing to load until the
+        // bar loads a track. `duration` is per-track (loadTrack), not config.
 
         // Lock-screen / Media Session skip-track buttons drive the bar's queue.
         opts.onNextTrack = () => this.next();
